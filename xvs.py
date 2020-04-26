@@ -1742,9 +1742,9 @@ def mwdbmask(clip, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0
     if yuv444 is None:
         yuv444 = not yuv420
     ## Canny edge detector
-    emask = clip.tcanny.TCanny(sigma, t_h, t_l, planes=[0,1,2] if chroma else [0])
+    emask = clip.tcanny.TCanny(sigma=sigma, t_h=t_h, t_l=t_l, planes=[0,1,2] if chroma else [0])
     if lmask is not None:
-        emask2 = clip.tcanny.TCanny(sigma2, t_h2, t_l2, planes=[0,1,2] if chroma else [0])
+        emask2 = clip.tcanny.TCanny(sigma=sigma2, t_h=t_h2, t_l=t_l2, planes=[0,1,2] if chroma else [0])
         emask = core.std.MaskedMerge(emask, emask2, lmask, [0,1,2] if chroma else [0], True)
     ## apply morphologic filters and merge mask planes
     emaskY = mvf.GetPlane(emask, 0)
