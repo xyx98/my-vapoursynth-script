@@ -1560,6 +1560,9 @@ def mwaa(clip, aa_y=True, aa_c=False, cs_h=0, cs_v=0, aa_cmask=True, kernel_y=2,
     Steal from other one's script. Most likely written by mawen1250.
     add opencl support for nnedi3,use znedi3 replace nnedi3
     """
+    if clip.format.bits_per_sample != 16:
+       raise vs.Error('mwaa: Only 16bit supported')
+
     ## internal functions
     mode="nnedi3cl" if opencl else "znedi3"
     def aa_kernel_vertical(clip):
@@ -1620,8 +1623,10 @@ def mwcfix(clip, kernel=1, restore=5, a=2, grad=2, warp=6, thresh=96, blur=3, re
     chroma restoration
     Steal from other one's script. Most likely written by mawen1250.
     repalce nnedi3 with znedi3
-
     """
+    if clip.format.bits_per_sample != 16:
+       raise vs.Error('mwcfix: Only 16bit supported')
+
     clip_y = mvf.GetPlane(clip, 0)
     clip_u = mvf.GetPlane(clip, 1)
     clip_v = mvf.GetPlane(clip, 2)
@@ -1737,9 +1742,9 @@ def mwdbmask(clip, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0
     if yuv444 is None:
         yuv444 = not yuv420
     ## Canny edge detector
-    emask = clip.tcanny.TCanny(sigma, t_h, t_l, planes=[0,1,2] if chroma else [0])
+    emask = clip.tcanny.TCanny(sigma=sigma, t_h=t_h, t_l=t_l, planes=[0,1,2] if chroma else [0])
     if lmask is not None:
-        emask2 = clip.tcanny.TCanny(sigma2, t_h2, t_l2, planes=[0,1,2] if chroma else [0])
+        emask2 = clip.tcanny.TCanny(sigma=sigma2, t_h=t_h2, t_l=t_l2, planes=[0,1,2] if chroma else [0])
         emask = core.std.MaskedMerge(emask, emask2, lmask, [0,1,2] if chroma else [0], True)
     ## apply morphologic filters and merge mask planes
     emaskY = mvf.GetPlane(emask, 0)
