@@ -4,6 +4,10 @@ import mvsfunc as mvf
 import havsfunc as haf
 import re,math,functools,sys,os
 import muvsfunc as muf
+try:
+    import znedi3_resample as nnrs
+except:
+    import nnedi3_resample as nnrs
 
 
 #main function
@@ -488,7 +492,7 @@ def LazyDering(src,depth=32,diff=8,thr=32):
     merge = core.std.MaskedMerge(Y,sharped, mask=masks)
     return core.std.ShufflePlanes([merge,src],[0,1,2], colorfamily=vs.YUV)
 
-def SADring(src,ring_r=2,warp_arg={},warpclip=None,edge_r=2,show_mode=0):
+def SADering(src,ring_r=2,warp_arg={},warpclip=None,edge_r=2,show_mode=0):
     """
     Simple Awarpsharp2 Dering
     ---------------------------------------
@@ -1160,6 +1164,32 @@ def statsinfo2csv(clip,plane=None,Max=True,Min=True,Avg=False,bits=8,namebase=No
         clip = info(clip,name,i)
     return clip
 
+def props2csv(clip:vs.VideoNode,props:list,titles:list,output="info.csv",sep="\t",charset="utf-8",tostring=None):
+    """
+    write props which you chosen to csv
+    you can rewrite tostring function to process props before write to csv
+
+    props: A list contain the name of props you want to write to csv
+    titles:A list contain titles of props
+    output:path of output file,default is info.csv
+    sep:the separator you want use,default is tab
+    charset:the charset of csv file you want use,default is utf-8
+    tostring:should be a function to process props before write to csv
+    """
+    file=open(output,"w",encoding=charset)
+    file.write(sep.join(["n"]+titles))
+    
+    tostring=tostring if callable(tostring) else lambda x: x.decode("utf-8") if isinstance(x,bytes) else str(x)
+
+
+    def tocsv(n,f,clip):
+        file.write("\n"+sep.join([str(n)]+[tostring(eval("f.props."+i,globals(),{'f':f})) for i in props]))
+        
+        return clip
+        file.close()
+    return core.std.FrameEval(clip, functools.partial(tocsv, clip=clip),prop_src=clip)
+
+
 def XSAA(src,nsize=None,nns=2,qual=None,aamode=-1,maskmode=1,opencl=False,device=-1,linedarken=False,preaa=0):
     """
     xyx98's simple aa function
@@ -1213,19 +1243,18 @@ def XSAA(src,nsize=None,nns=2,qual=None,aamode=-1,maskmode=1,opencl=False,device
             qual = 1
         aa=nnedi3(clip,dh=False,field=3,nsize=nsize,nns=nns,qual=qual,device=device,mode=nk)
         last=core.std.Merge(aa[0::2], aa[1::2])
-    #last = last.fmtc.resample(sx=-0.5)
     if linedarken:
         last = haf.FastLineDarkenMOD(last, strength=48, protection=5, luma_cap=191, threshold=5, thinning=0)
 
 
     if maskmode==1:
-        mask=clip.tcanny.TCanny(1.5, 20.0, 8.0)
+        mask=clip.tcanny.TCanny(sigma=1.5, t_h=20.0, t_l=8.0)
         mask=haf.mt_expand_multi(mask, 'losange', planes=[0], sw=1, sh=1)
         if preaa==1:
             clip=Yclip
         last=core.std.MaskedMerge(clip, last, mask)
     elif maskmode==2:
-        mask=last.tcanny.TCanny(1.5, 20.0, 8.0)
+        mask=last.tcanny.TCanny(sigma=1.5, t_h=20.0, t_l=8.0)
         mask=haf.mt_expand_multi(mask, 'losange', planes=[0], sw=1, sh=1)
         if preaa==1:
             clip=Yclip
@@ -1285,9 +1314,9 @@ def lbdeband(clip:vs.VideoNode,dbit=6):
     You need use trim,mask or other way you can to protect the area without heavy banding.
     """
 
-    if src.format.color_family==vs.RGB:
+    if clip.format.color_family==vs.RGB:
         raise TypeError("RGB is unsupported")
-    isGary=clip.format.color_family==vs.GARY
+    isGary=clip.format.color_family==vs.GRAY
     clip=mvf.Depth(clip,16)
     luma=clip if isGary else getY(clip)
     down=mvf.Depth(luma,dbit,dither=1).f3kdb.Deband(31, 64, 0, 0, 0, 0, output_depth=16)
@@ -1495,7 +1524,7 @@ def ssharp(clip,chroma=True,mask=False,compare=False):
         last=core.rgvs.Repair(sha, src, 13)
         last=mvf.LimitFilter(src, last, thr=1, thrc=0.5, elast=6, brighten_thr=0.5, planes=[0,1,2])
         if mask:
-            mask1=src.tcanny.TCanny(0.5, 20.0, 8.0,1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
+            mask1=src.tcanny.TCanny(sigma=0.5, t_h=20.0, t_l=8.0,mode=1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
             mask1=inpand(expand(mask1,cycle=1),cycle=1)
             mask2=core.std.Expr([last,src],"x y - abs 96 *").rgvs.RemoveGrain(4)
             mask2=core.std.Expr(mask2,"x 30000 < 0 x ?")
@@ -1507,7 +1536,7 @@ def ssharp(clip,chroma=True,mask=False,compare=False):
         last=core.rgvs.Repair(sha, srcy, 13)
         last=mvf.LimitFilter(srcy, last, thr=1,elast=6, brighten_thr=0.5, planes=0)
         if mask:
-            mask1=srcy.tcanny.TCanny(0.5, 20.0, 8.0,1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
+            mask1=srcy.tcanny.TCanny(sigma=0.5, t_h=20.0, t_l=8.0,mode=1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
             mask1=inpand(expand(mask1,cycle=1),cycle=1)
             mask2=core.std.Expr([last,srcy],"x y - abs 96 *").rgvs.RemoveGrain(4)
             mask2=core.std.Expr(mask2,"x 30000 < 0 x ?")
@@ -1519,7 +1548,7 @@ def ssharp(clip,chroma=True,mask=False,compare=False):
         last=core.rgvs.Repair(sha, src, 13)
         last=mvf.LimitFilter(src, last, thr=1, thrc=0.5, elast=6, brighten_thr=0.5)
         if mask:
-            mask1=src.tcanny.TCanny(0.5, 20.0, 8.0,1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
+            mask1=src.tcanny.TCanny(sigma=0.5, t_h=20.0, t_l=8.0,mode=1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
             mask1=inpand(expand(mask1,cycle=1),cycle=1)
             mask2=core.std.Expr([last,src],"x y - abs 96 *").rgvs.RemoveGrain(4)
             mask2=core.std.Expr(mask2,"x 30000 < 0 x ?")
@@ -1554,14 +1583,14 @@ def readmpls(path:str,sfilter='ffms2',cache=None):
         raise ValueError("unknown source filter")
     return core.std.Splice(clips)
 
-def mwaa(clip, aa_y=True, aa_c=False, cs_h=0, cs_v=0, aa_cmask=True, kernel_y=2, kernel_c=1, show=True,opencl=False,device=0):
+def mwaa(clip, aa_y=True, aa_c=False, cs_h=0, cs_v=0, aa_cmask=True, kernel_y=2, kernel_c=1, show=False,opencl=False,device=0):
     """
     Anti-Aliasing function
     Steal from other one's script. Most likely written by mawen1250.
     add opencl support for nnedi3,use znedi3 replace nnedi3
     """
     if clip.format.bits_per_sample != 16:
-       raise vs.Error('mwaa: Only 16bit supported')
+        raise vs.Error('mwaa: Only 16bit supported')
 
     ## internal functions
     mode="nnedi3cl" if opencl else "znedi3"
@@ -1593,7 +1622,7 @@ def mwaa(clip, aa_y=True, aa_c=False, cs_h=0, cs_v=0, aa_cmask=True, kernel_y=2,
     aa = aa_resample_vercial(aa_kernel_vertical(aa.std.Transpose()), clip.height, cs_v)
 
     ## mask
-    aamask = clip.tcanny.TCanny(1.5, 20.0, 8.0, planes=[0])
+    aamask = clip.tcanny.TCanny(sigma=1.5, t_h=20.0, t_l=8.0, planes=[0])
     aamask = haf.mt_expand_multi(aamask, 'losange', planes=[0], sw=1, sh=1)
 
     ## merge
@@ -1618,14 +1647,14 @@ def mwaa(clip, aa_y=True, aa_c=False, cs_h=0, cs_v=0, aa_cmask=True, kernel_y=2,
     ## output
     return aamask if show else aa_merge
 
-def mwcfix(clip, kernel=1, restore=5, a=2, grad=2, warp=6, thresh=96, blur=3, repair=1, cs_h=0, cs_v=0):
+def mwcfix(clip, kernel=1, restore=5, a=2, grad=2, warp=6, thresh=96, blur=3, repair=1, cs_h=0, cs_v=0, device_type="gpu", device_id=0):
     """
     chroma restoration
     Steal from other one's script. Most likely written by mawen1250.
     repalce nnedi3 with znedi3
     """
     if clip.format.bits_per_sample != 16:
-       raise vs.Error('mwcfix: Only 16bit supported')
+        raise vs.Error('mwcfix: Only 16bit supported')
 
     clip_y = mvf.GetPlane(clip, 0)
     clip_u = mvf.GetPlane(clip, 1)
@@ -1675,8 +1704,8 @@ def mwcfix(clip, kernel=1, restore=5, a=2, grad=2, warp=6, thresh=96, blur=3, re
     pp_v = clip_v
 
     if restore > 0:
-        rst_u = pp_u.knlm.KNLMeansCL(d=0, a=a, s=1, h=restore, rclip=clip_y).rgvs.Repair(pp_u, 13)
-        rst_v = pp_v.knlm.KNLMeansCL(d=0, a=a, s=1, h=restore, rclip=clip_y).rgvs.Repair(pp_v, 13)
+        rst_u = pp_u.knlm.KNLMeansCL(d=0, a=a, s=1, h=restore, rclip=clip_y, device_type=device_type, device_id=device_id).rgvs.Repair(pp_u, 13)
+        rst_v = pp_v.knlm.KNLMeansCL(d=0, a=a, s=1, h=restore, rclip=clip_y, device_type=device_type, device_id=device_id).rgvs.Repair(pp_v, 13)
         low_u = rst_u
         low_v = rst_v
         for i in range(grad):
@@ -1744,7 +1773,7 @@ def mwdbmask(clip, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0
     ## Canny edge detector
     emask = clip.tcanny.TCanny(sigma=sigma, t_h=t_h, t_l=t_l, planes=[0,1,2] if chroma else [0])
     if lmask is not None:
-        emask2 = clip.tcanny.TCanny(sigma=sigma2, t_h=t_h2, t_l=t_l2, planes=[0,1,2] if chroma else [0])
+        emask2 = clip.tcanny.TCanny(sigma2=sigma2,t_h=t_h2, t_l=t_l2, planes=[0,1,2] if chroma else [0])
         emask = core.std.MaskedMerge(emask, emask2, lmask, [0,1,2] if chroma else [0], True)
     ## apply morphologic filters and merge mask planes
     emaskY = mvf.GetPlane(emask, 0)
@@ -1770,19 +1799,24 @@ def mwdbmask(clip, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0
     dbmask = core.std.ShufflePlanes([dbmask, dbmaskC, dbmaskC], [0,0,0], vs.YUV)
     return dbmask
 
-def mwenhance(diffClip, chroma=False, Strength=2.0, Szrp8=8, Spwr=4, SdmpLo=4, SdmpHi=48, Soft=0):
+def mwenhance(diffClip, chroma=False, Strength=2.0, Szrp8=8, Spwr=4, SdmpLo=4, SdmpHi=48, Soft=0, useExpr=False):
     """
     high frequency enhance
     Steal from other one's script. Most likely written by mawen1250.
     use it on your high frequency layer.
+    
+    add useExpr for using Expr instead of lut
+
     """
     # constant values for sharpening LUT
+    if Strength<=0:
+        return diffClip
+
     sbitPS = diffClip.format.bits_per_sample
     bpsMul8 = 1 << (sbitPS - 8)
     floor = 0
     ceil = (1 << sbitPS) - 1
     neutral = 1 << (sbitPS - 1)
-    neutralstr = ' {} '.format(neutral)
     miSpwr = 1 / Spwr
     Szrp = Szrp8 * bpsMul8
     Szrp8Sqr = Szrp8 * Szrp8
@@ -1790,32 +1824,56 @@ def mwenhance(diffClip, chroma=False, Strength=2.0, Szrp8=8, Spwr=4, SdmpLo=4, S
     Szrp8SqrPlusSdmpLo = Szrp8Sqr + SdmpLo
     SdmpHiEqual0 = SdmpHi == 0
     Szrp8DivSdmpHiPower4Plus1 = 1 if SdmpHiEqual0 else (Szrp8 / SdmpHi) ** 4 + 1
-    # function to generate sharpening LUT
-    def diffEhFunc(x):
-        if x == neutral:
-            return x
 
-        diff = x - neutral
-        absDiff = abs(diff)
-        diff8 = diff / bpsMul8
-        absDiff8 = abs(diff8)
-        diff8Sqr = diff8 * diff8
-        signMul = 1 if diff >= 0 else -1
+    if useExpr:
+        #generate expr
+        diff=' x {neutral} - '.format(neutral=neutral)
+        absDiff=' {diff} abs '.format(diff=diff)
+        diff8=' {diff} {bpsMul8} / '.format(diff=diff,bpsMul8=bpsMul8)
+        absDiff8=' {diff8} abs '.format(diff8=diff8)
+        diff8Sqr = ' {diff8} {diff8} * '.format(diff8=diff8)
+        signMul=' {diff} 0 >= 1 -1 ? '.format(diff=diff)
 
-        res1 = (absDiff / Szrp) ** miSpwr * SzrpMulStrength * signMul
-        res2 = diff8Sqr * Szrp8SqrPlusSdmpLo / ((diff8Sqr + SdmpLo) * Szrp8Sqr)
-        res3 = 0 if SdmpHiEqual0 else (absDiff8 / SdmpHi) ** 4
-        enhanced = res1 * res2 * Szrp8DivSdmpHiPower4Plus1 / (1 + res3)
+        res1=' {absDiff} {Szrp} / {miSpwr} pow {SzrpMulStrength} * {signMul} * '.format(absDiff=absDiff,Szrp=Szrp,miSpwr=miSpwr,SzrpMulStrength=SzrpMulStrength,signMul=signMul)
+        res2=' {diff8Sqr} {Szrp8SqrPlusSdmpLo} * {diff8Sqr} {SdmpLo} + {Szrp8Sqr} * / '.format(diff8Sqr=diff8Sqr,Szrp8SqrPlusSdmpLo=Szrp8SqrPlusSdmpLo,SdmpLo=SdmpLo,Szrp8Sqr=Szrp8Sqr)
+        res3=' 0 ' if SdmpHiEqual0 else ' {absDiff8} {SdmpHi} / 4 pow '.format(absDiff8=absDiff8,SdmpHi=SdmpHi)
 
-        return min(ceil, max(floor, round(neutral + enhanced)))
-    # apply sharpening LUT and soften the result
-    if Strength > 0:
+        enhanced=' {res1} {res2} * {Szrp8DivSdmpHiPower4Plus1} * 1 {res3} + /'.format(res1=res1,res2=res2,res3=res3,Szrp8DivSdmpHiPower4Plus1=Szrp8DivSdmpHiPower4Plus1)
+        enhanced=' {ceil} {floor} {neutral} {enhanced} + max min '.format(ceil=ceil,floor=floor,neutral=neutral,enhanced=enhanced)
+
+        expr=' x {neutral} = x {enhanced} ? '.format(neutral=neutral,enhanced=enhanced)
+
+        #apply expr
+        diffClip=diffClip.std.Expr([expr,expr if chroma else ''])
+
+    else:
+        # function to generate sharpening LUT
+        def diffEhFunc(x):
+            if x == neutral:
+                return x
+
+            diff = x - neutral
+            absDiff = abs(diff)
+            diff8 = diff / bpsMul8
+            absDiff8 = abs(diff8)
+            diff8Sqr = diff8 * diff8
+            signMul = 1 if diff >= 0 else -1
+
+            res1 = (absDiff / Szrp) ** miSpwr * SzrpMulStrength * signMul
+            res2 = diff8Sqr * Szrp8SqrPlusSdmpLo / ((diff8Sqr + SdmpLo) * Szrp8Sqr)
+            res3 = 0 if SdmpHiEqual0 else (absDiff8 / SdmpHi) ** 4
+            enhanced = res1 * res2 * Szrp8DivSdmpHiPower4Plus1 / (1 + res3)
+
+            return min(ceil, max(floor, round(neutral + enhanced)))
+        # apply sharpening LUT
         diffClip = diffClip.std.Lut([0,1,2] if chroma else [0], function=diffEhFunc)
-        if Soft > 0:
-            diffClipEhSoft = diffClip.rgvs.RemoveGrain([19, 19 if chroma else 0])
-            diffClipEhSoft = diffClipEhSoft if Soft >= 1 else core.std.Merge(diffClip, diffClipEhSoft, [1 - Soft, Soft])
-            limitDiffExpr = 'x ' + neutralstr + ' - abs y ' + neutralstr + ' - abs <= x y ?'
-            diffClip = core.std.Expr([diffClip, diffClipEhSoft], [limitDiffExpr, limitDiffExpr if chroma else ''])
+
+    #soften the result
+    if Soft > 0:
+        diffClipEhSoft = diffClip.rgvs.RemoveGrain([19, 19 if chroma else 0])
+        diffClipEhSoft = diffClipEhSoft if Soft >= 1 else core.std.Merge(diffClip, diffClipEhSoft, [1 - Soft, Soft])
+        limitDiffExpr=' x {neutral} - abs y {neutral} - abs <= x y ? '.format(neutral=neutral)
+        diffClip = core.std.Expr([diffClip, diffClipEhSoft], [limitDiffExpr, limitDiffExpr if chroma else ''])
     # output
     return diffClip
 
@@ -1881,8 +1939,79 @@ def drAA(src,drf=0.5,lraa=True,opencl=False,device=-1,pp=True):
         last= Ylast
     return last
 
-#helper function:
+def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,show="result",**args):
+    if src.format.color_family not in [vs.YUV,vs.GRAY]:
+        raise ValueError("input clip should be YUV or GRAY!")
 
+    src_h,src_w=src.height,src.width
+    if w is None and h is None:
+        w,h=1280,720
+    elif w is None:
+        w=int(h*src_w/src_h)
+    else:
+        h=int(w*src_h/src_w)
+
+    if w>=src_w or h>=src_h:
+        raise ValueError("w,h should less than input resolution")
+    
+    kernel=kernel.strip().capitalize()
+    if kernel not in ["Debilinear","Debicubic","Delanczos","Despline16","Despline36"]:
+        raise ValueError("unsupport kernel")
+    
+    src=core.fmtc.bitdepth(src,bits=16)
+    luma=getY(src)
+    ####
+    if kernel in ["Debilinear","Despline16","Despline36"]:
+        luma_de=eval("core.descale.{k}(luma.fmtc.bitdepth(bits=32),w,h)".format(k=kernel))
+        luma_up=eval("core.resize.{k}(luma_de,src_w,src_h)".format(k=kernel[2:].capitalize())).fmtc.bitdepth(bits=16,dmode=1)
+    elif kernel=="Debicubic":
+        luma_de=core.descale.Debicubic(luma.fmtc.bitdepth(bits=32),w,h,b=args.get("b"),c=args.get("c"))
+        luma_up=core.resize.Bicubic(luma_de,src_w,src_h,filter_param_a=args.get("b"),filter_param_b=args.get("c")).fmtc.bitdepth(bits=16,dmode=1)
+    else:
+        luma_de=core.descale.Delanczos(luma.fmtc.bitdepth(bits=32),w,h,taps=args.get("taps"))
+        luma_up=core.resize.Lanczos(luma_de,src_w,src_h,filter_param_a=args.get("taps")).fmtc.bitdepth(bits=16,dmode=1)
+    
+    luma_rescale=nnrs.nnedi3_resample(luma_de,src_w,src_h,qual=2,nsize=3).fmtc.bitdepth(bits=16)
+
+    if mask:
+        mask=core.std.Expr([luma,luma_up],"x y - abs").std.Binarize(mask_dif_pix*256)
+        mask=expand(mask,cycle=2)
+        mask=inpand(mask,cycle=2)
+
+        luma_rescale=core.std.MaskedMerge(luma_rescale,luma,mask)
+    
+    if show=="descale":
+        return luma_de
+    elif show=="mask":
+        return mask
+    elif show=="both":
+        return luma_de,mask
+
+    if src.format.color_family==vs.GRAY:
+        return luma_rescale
+    else:
+        return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
+
+def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vfm_chroma=True,vfm_block=(16,16),y0=16,y1=16,micmatch=1,cycle=5,vd_chroma=True,dupthresh=1.1,scthresh=15,vd_block=(32,32),pp=True,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
+    """
+    warp function for vivtc with a simple post-process use nnedi3
+    """
+    src8=core.fmtc.bitdepth(src,bits=8)
+    src16=core.fmtc.bitdepth(src,bits=16)
+
+    def selector(n,f,match,di):
+        if f.props["_Combed"]>0:
+            return di
+        else:
+            return match
+
+    match=core.vivtc.VFM(src8,order=order,field=field,mode=mode,mchroma=mchroma,cthresh=cthresh,mi=mi,chroma=vfm_chroma,blockx=vfm_block[0],blocky=vfm_block[1],y0=y0,y1=y1,scthresh=scthresh,micmatch=micmatch,clip2=src16)
+    if pp:
+        di=nnedi3(match,field=order,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=2,mode="nnedi3cl" if opencl else "znedi3")
+        match=core.std.FrameEval(match,functools.partial(selector,match=match,di=di),prop_src=match)
+
+    return core.vivtc.VDecimate(match,cycle=cycle,chroma=vd_chroma,dupthresh=dupthresh,scthresh=scthresh,blockx=vd_block[0],blocky=vd_block[1])
+#helper function:
 
 #converting the values in one depth to another
 def scale(i,depth_out=16,depth_in=8):
@@ -1982,60 +2111,27 @@ def nnedi3(clip,field,dh=False,dw=False,planes=None,nsize=6,nns=1,qual=1,etype=0
     else:
         raise ValueError("Unknown mode,mode must in ['nnedi3','nnedi3cl','znedi3']")
 
+def eedi3(clip, field, dh=None, planes=None, alpha=None, beta=None, gamma=None, nrad=None, mdis=None,
+        hp=None, ucubic=None, cost3=None, vcheck=None, vthresh0=None, vthresh1=None, vthresh2=None, sclip=None,
+        mode="eedi3m",device=None,list_device=None,info=None):
+    mode=mode.lower()
+    if mode=="eedi3m":
+        return clip.eedi3m.EEDI3(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip, opt)
+    elif mode=="eedi3cl":
+        return clip.eedi3m.EEDI3CL(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip, opt, device, list_device, info)
+    elif mode=="eedi3":
+        return clip.eedi3.eedi3(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip)
+    else:
+        raise ValueError("Unknown mode,mode must in ['eedi3m,eedi3,eedi3cl']")
 
-#testing
-def xcUSM(src:vs.VideoNode,blur=None,hip=None,lowp=None,pp=None,plane=[0],mask=None,merge="src+hi"):
-    """
-    USM based sharp function for someone want custom some process detail
-    """
-    if blur is None:
-        blur=functools.partial(core.rgvs.RemoveGrain,mode=11)
 
-    if hip is not None and  not callable(hip):
-        raise TypeError("hip must be a function or just be None")
-
-    if lowp is not None and  not callable(lowp):
-        raise TypeError("lowp must be a function or just be None")
-
-    if pp is not None and not callable(pp):
-        raise TypeError("pp must be a function or just be None")
-
-    if mask is not None and not callable(mask):
-        raise TypeError("mask must be a function or just be None")
-
-    if isinstance(plane,int):
-        plane=[plane]
-
-    src=src.fmtc.bitdepth(bits=16)
-    num_planes= src.format.num_planes
-
-    def usm_core(clip):
-        low=blur(clip)
-        hi=core.std.MakeDiff(clip,low)
-
-        if hip is not None:
-            hi=hip(hi)
-        if lowp is not None:
-            low=lowp(low)
-
-        if merge=="src+hi":
-            last=core.std.MergeDiff(clip,hi)
-        elif merge=="low+hi":
-            last=core.std.MergeDiff(low,hi)
-        else:
-            raise ValueError("unknown mode")
-
-        if pp is not None:
-            last=pp(last,clip)
-
-        if mask is not None:
-            maskclip=mask(clip)
-            last=core.std.MaskedMerge(last,clip,maskclip)
-            
-        return last
-
-    planes=[getplane(src,x) for x in range(num_planes)]
-    for i in plane:
-        planes[i]=usm_core(planes[i])
-
-    return core.std.ShufflePlanes(planes,[0]*num_planes,src.format.color_family)
+def preview(*args):
+    if len(args)==1:
+        return mvf.Preview(args[0])
+    else:
+        plist=[]
+        for i in range(len(args)):
+            t=core.sub.Subtitle(args[i],"clip"+str(i))
+            t=mvf.Preview(t)
+            plist.append(t)
+        return core.std.Interleave(plist)
