@@ -139,8 +139,8 @@ def SPresso(clip=None, limit=2, bias=25, RGmode=4, limitC=4, biasC=50, RGmodeC=0
     ###
     rg = core.rgvs.RemoveGrain(clip,[RGmode,RGmodeC])
     Y = core.std.Expr([getplane(clip,0),getplane(rg,0)],expr)
-    U = getplane(clip,1) if RGmodeC==0 else core.std.Expr([getplane(clip,1),bgetplane(rg,1)],exprC)
-    V = getplane(clip,2) if RGmodeC==0 else core.std.Expr([getplane(clip,2),bgetplane(rg,2)],exprC)
+    U = getplane(clip,1) if RGmodeC==0 else core.std.Expr([getplane(clip,1),getplane(rg,1)],exprC)
+    V = getplane(clip,2) if RGmodeC==0 else core.std.Expr([getplane(clip,2),getplane(rg,2)],exprC)
     last = core.std.ShufflePlanes([Y,U,V],[0,0,0], colorfamily=vs.YUV)
     return last
 
@@ -267,7 +267,7 @@ def mvfrc(input,it=140,scp=15,num=60000,den=1001,preset='fast',
     funcName = 'mvfrc'
     if not isinstance(input, vs.VideoNode):
         raise TypeError(funcName + ': This is not a clip!')
-#############
+    #############
     if preset == 'fast':
         pnum=0
     elif preset == 'medium':
@@ -277,11 +277,11 @@ def mvfrc(input,it=140,scp=15,num=60000,den=1001,preset='fast',
     else:
         raise TypeError(funcName + r":preset should be fast\ medium\slow'")
     overlapv = overlap
-#############
+    #############
     if search is None : search = [0,3,3][pnum]
     if block_mode is None : block_mode = [0,0,3][pnum]
     if flow_mask is None : flow_mask = [0,0,2][pnum]
-#############
+    #############
     analParams = {
         'overlap' : overlap,
         'overlapv':overlapv,
@@ -295,7 +295,7 @@ def mvfrc(input,it=140,scp=15,num=60000,den=1001,preset='fast',
         'badrange':badrange,
         'divide':divide
         }
-############
+    ############
     #block or flow Params 
     bofp = {
         'thscd1':it,
@@ -304,7 +304,7 @@ def mvfrc(input,it=140,scp=15,num=60000,den=1001,preset='fast',
         'num':num,
         'den':den
         }
-############
+    ############
     sup = core.mv.Super(input, pel=pel,sharp=2, rfilter=4)
     bvec = core.mv.Analyse(sup, isb=True, **analParams)
     fvec = core.mv.Analyse(sup, isb=False, **analParams)
@@ -437,7 +437,7 @@ def textsub(input,file,charset=None,fps=None,vfr=None,
         TypeError(funcName + ': Only support YUV420、YUV422、YUV444')
     if Matrix is None:
         Matrix = M(width,height)
-##############
+    ##############
     def vsmode(clip,file,charset,fps,vfr,mod):
         core = vs.get_core()
         if mod == False:
@@ -451,7 +451,7 @@ def textsub(input,file,charset=None,fps=None,vfr=None,
         expr="x y - abs 1 < 0 255 ?"
         last = core.std.Expr([a,b], [expr]*3)
         return core.fmtc.bitdepth(last,bits=depth)
-##############
+    ##############
     src8  = core.resize.Bilinear(input,format=vs.YUV420P8)
     sub8  = vsmode(src8,file,charset,fps,vfr,mod)
     mask  = mskE(src8,sub8,bit)
@@ -467,7 +467,7 @@ def textsub(input,file,charset=None,fps=None,vfr=None,
         mask = core.std.ShufflePlanes(mask,[0,0,0], colorfamily=vs.YUV)
     else:
         mask = core.std.ShufflePlanes([mask,maskC],[0,0,0], colorfamily=vs.YUV)
-################
+    ################
     rgb   = core.resize.Bilinear(input,format=vs.RGB24,matrix_in_s=Matrix)
     sub   = vsmode(rgb,file,charset,fps,vfr,mod)
     sub   = core.resize.Bilinear(sub,format=f,matrix_s=Matrix)
@@ -764,7 +764,7 @@ def FIFP(src,mode=0,tff=True,mi=40,blockx=16,blocky=16,cthresh=8,chroma=False,me
                 else:
                     return de
             dl=core.std.FrameEval(src, functools.partial(postprocess, clip=src, de=deinterlace))
-            di=core.std.Cache(di, make_linear=True)
+            dl=core.std.Cache(dl, make_linear=True)
             tlist=[]
             for i in range(lenlst):
                 if lst[i]==0:
@@ -2011,6 +2011,93 @@ def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vf
         match=core.std.FrameEval(match,functools.partial(selector,match=match,di=di),prop_src=match)
 
     return core.vivtc.VDecimate(match,cycle=cycle,chroma=vd_chroma,dupthresh=dupthresh,scthresh=scthresh,blockx=vd_block[0],blocky=vd_block[1])
+
+def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,mode="cpu",radius=0,chroma=False,fast=True,
+            block_step1=None,bm_range1=None, ps_num1=None, ps_range1=None,
+            block_step2=None,bm_range2=None, ps_num2=None, ps_range2=None,
+            extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT",
+            refine=1,dmode=0):
+    bits=clip.format.bits_per_sample
+    clip=core.fmtc.bitdepth(clip,bits=32)
+    if chroma is True and clip.format.id !=vs.YUV444PS:
+        raise ValueError("chroma=True only works on yuv444")
+    
+    isvbm3d=radius>0
+
+    if sigma2 is None:
+        sigma2=sigma
+
+    if preset2 is None:
+        preset2=preset
+
+    if preset not in ["fast","lc","np","high"] or preset2 not in ["fast","lc","np","high"]:
+        raise ValueError("preset and preset2 must be 'fast','lc','np',or'high'")
+
+    parmas1={
+        #block_step,bm_range, ps_num, ps_range
+        "fast":[8,9,2,4],
+        "lc"  :[6,9,2,4],
+        "np"  :[4,16,2,5],
+        "high":[3,16,2,7],
+    }
+
+    vparmas1={
+        #block_step,bm_range, ps_num, ps_range
+        "fast":[8,7,2,4],
+        "lc"  :[6,9,2,4],
+        "np"  :[4,12,2,5],
+        "high":[3,16,2,7],
+    }
+
+    parmas2={
+        #block_step,bm_range, ps_num, ps_range
+        "fast":[7,9,2,5],
+        "lc"  :[6,9,2,5],
+        "np"  :[3,16,2,6],
+        "high":[2,16,2,8],
+    }
+
+    vparmas2={
+        #block_step,bm_range, ps_num, ps_range
+        "fast":[7,7,2,5],
+        "lc"  :[6,9,2,5],
+        "np"  :[3,12,2,6],
+        "high":[2,16,2,8],
+    }
+
+
+    if isvbm3d:
+        p1,p2=vparmas1,vparmas2
+    else:
+        p1,p2=parmas1,parmas2
+
+    
+    block_step1=p1[preset][0] if block_step1 is None else block_step1
+    bm_range1=p1[preset][1] if bm_range1 is None else bm_range1
+    ps_num1=p1[preset][2] if ps_num1 is None else ps_num1
+    ps_range1=p1[preset][3] if ps_range1 is None else ps_range1
+
+    block_step2=p1[preset2][0] if block_step2 is None else block_step2
+    bm_range2=p1[preset2][1] if bm_range2 is None else bm_range2
+    ps_num2=p1[preset2][2] if ps_num2 is None else ps_num2
+    ps_range2=p1[preset2][3] if ps_range2 is None else ps_range2
+
+    if isvbm3d:
+        flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+        flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
+
+        for i in range(refine):
+            flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+            flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
+
+    else:
+        flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+
+        for i in range(refine):
+            flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+
+    return core.fmtc.bitdepth(flt,bits=bits,dmode=dmode)
+
 #helper function:
 
 #converting the values in one depth to another
@@ -2113,7 +2200,7 @@ def nnedi3(clip,field,dh=False,dw=False,planes=None,nsize=6,nns=1,qual=1,etype=0
 
 def eedi3(clip, field, dh=None, planes=None, alpha=None, beta=None, gamma=None, nrad=None, mdis=None,
         hp=None, ucubic=None, cost3=None, vcheck=None, vthresh0=None, vthresh1=None, vthresh2=None, sclip=None,
-        mode="eedi3m",device=None,list_device=None,info=None):
+        mode="eedi3m",device=None,list_device=None,info=None,opt=None):
     mode=mode.lower()
     if mode=="eedi3m":
         return clip.eedi3m.EEDI3(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip, opt)
@@ -2135,3 +2222,14 @@ def preview(*args):
             t=mvf.Preview(t)
             plist.append(t)
         return core.std.Interleave(plist)
+
+def bm3d_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=0,ps_num=2,ps_range=4,chroma=False,fast=True,extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT"):
+    if mode not in ["cpu","cuda","cuda_rtc"]:
+        raise ValueError("mode must be cpu,or cuda,or cuda_rtc")
+    elif mode=="cpu":
+        return core.bm3dcpu.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma)
+    elif mode=="cuda":
+        return core.bm3dcuda.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id)
+    else:
+        return core.bm3dcuda_rtc.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+    
