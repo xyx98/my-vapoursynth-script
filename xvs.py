@@ -1939,7 +1939,7 @@ def drAA(src,drf=0.5,lraa=True,opencl=False,device=-1,pp=True):
         last= Ylast
     return last
 
-def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,show="result",**args):
+def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,**args):
     if src.format.color_family not in [vs.YUV,vs.GRAY]:
         raise ValueError("input clip should be YUV or GRAY!")
 
@@ -1971,6 +1971,13 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
         luma_de=core.descale.Delanczos(luma.fmtc.bitdepth(bits=32),w,h,taps=args.get("taps"))
         luma_up=core.resize.Lanczos(luma_de,src_w,src_h,filter_param_a=args.get("taps")).fmtc.bitdepth(bits=16,dmode=1)
     
+    if postfilter_descaled is None:
+        pass
+    elif callable(postfilter_descaled):
+        luma_de=postfilter_descaled(luma_de)
+    else:
+        raise ValueError("postfilter_descaled must be a function")
+
     luma_rescale=nnrs.nnedi3_resample(luma_de,src_w,src_h,qual=2,nsize=3).fmtc.bitdepth(bits=16)
 
     if mask:
@@ -2097,6 +2104,56 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
             flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
 
     return core.fmtc.bitdepth(flt,bits=bits,dmode=dmode)
+
+def SCSharpen(clip:vs.VideoNode,ref:vs.VideoNode,max_sharpen_weight=0.3,clean=True):
+    """
+    Sharpness Considered Sharpen:
+    It mainly design for sharpen a bad source after blurry filtered such as strong AA, and source unsuited to be reference when you want sharpen filtered clip to match the sharpness of source.
+    It use cas as sharpen core,and calculate sharpness of source(reference clip),filtered clip (the clip you want sharpen),and sharpen clip(by cas).Use these sharpness information adjust merge weight of filtered clip and sharpen clip.
+    ############################
+    If clean is True,use haf.EdgeCleaner clean edge after sharpen.
+    Don't use high max_sharpen_weight or you might need addition filter to resolve artifacts cause by cas(1).
+    only luma processed,output is always 16bit.
+    """
+    if max_sharpen_weight >1 or max_sharpen_weight <=0 :
+        raise ValueError("max_sharpen_weight should in (0,1]")
+
+    ref,clip=core.fmtc.bitdepth(ref,bits=16),core.fmtc.bitdepth(clip,bits=16)
+    if clip.format.color_family == vs.YUV:
+        isYUV=True
+        last=getY(clip)
+    elif clip.format.color_family == vs.GRAY:
+        last=clip
+    else:
+        raise vs.ValueError("clip must be YUV or GRAY")
+
+    if ref.format.color_family == vs.YUV:
+        ref=getY(ref)
+    elif ref.format.color_family == vs.GRAY:
+        pass
+    else:
+        raise vs.ValueError("ref must be YUV or GRAY")
+
+    sharp=core.cas.CAS(last,1,0)
+    ref,last,sharp=map(getsharpness,[ref,last,sharp])
+    #########################
+    base=" z.sharpness y.sharpness - "
+    k1=f"x.sharpness y.sharpness - {base} /"
+    k2=f"z.sharpness x.sharpness - {base} /"
+    L1=max_sharpen_weight
+    L2=1-L1
+
+    expr=f" {k1} {L1} > {L1} z * {L2} y * + {k1} z * {k2} y * + ? "
+    last=core.akarin.Expr([ref,last,sharp],expr)
+    
+    if clean:
+        last=haf.EdgeCleaner(last,strength=10, rep=True, rmode=17, smode=0, hot=False)
+    
+    if isYUV:
+        last=core.std.ShufflePlanes([last,clip],[0,1,2],vs.YUV)
+
+    return last
+
 
 #helper function:
 
@@ -2233,3 +2290,17 @@ def bm3d_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=
     else:
         return core.bm3dcuda_rtc.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
     
+
+def getsharpness(clip,show=False):
+
+    def calc(n,f): 
+        fout=f[1].copy()
+        fout.props["sharpness"]=f[0].props["PlaneStatsAverage"]*65535
+        return fout
+
+    luma=getY(clip)
+    blur=core.rgvs.RemoveGrain(luma, 20)
+    dif=core.akarin.Expr([luma,blur],["x y - 65535 / 2 pow 65535 *"])
+    dif=core.std.PlaneStats(dif)
+    last=core.std.ModifyFrame(clip,[dif,clip],calc)
+    return core.text.FrameProps(last,"sharpness",scale=2) if show else last
