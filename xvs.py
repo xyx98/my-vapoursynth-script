@@ -2124,6 +2124,7 @@ def SCSharpen(clip:vs.VideoNode,ref:vs.VideoNode,max_sharpen_weight=0.3,clean=Tr
         last=getY(clip)
     elif clip.format.color_family == vs.GRAY:
         last=clip
+        isYUV=False
     else:
         raise vs.ValueError("clip must be YUV or GRAY")
 
