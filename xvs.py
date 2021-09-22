@@ -2059,7 +2059,7 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
     parmas2={
         #block_step,bm_range, ps_num, ps_range
         "fast":[7,9,2,5],
-        "lc"  :[6,9,2,5],
+        "lc"  :[5,9,2,5],
         "np"  :[3,16,2,6],
         "high":[2,16,2,8],
     }
@@ -2067,7 +2067,7 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
     vparmas2={
         #block_step,bm_range, ps_num, ps_range
         "fast":[7,7,2,5],
-        "lc"  :[6,9,2,5],
+        "lc"  :[5,9,2,5],
         "np"  :[3,12,2,6],
         "high":[2,16,2,8],
     }
