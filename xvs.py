@@ -4,10 +4,19 @@ import mvsfunc as mvf
 import havsfunc as haf
 import re,math,functools,sys,os
 import muvsfunc as muf
-try:
-    import znedi3_resample as nnrs
-except:
-    import nnedi3_resample as nnrs
+
+import nnedi3_resample as nnrs
+if hasattr(core,"znedi3"):
+    try:
+        nnrs.nnedi3_resample=functools.partial(nnrs.nnedi3_resample,mode="znedi3")
+    except:
+        if "API R4.0" not in core.version():
+            try:
+                import znedi3_resample as nnrs
+            except:
+                pass
+
+
 
 
 #main function
@@ -1195,7 +1204,7 @@ def XSAA(src,nsize=None,nns=2,qual=None,aamode=-1,maskmode=1,opencl=False,device
     xyx98's simple aa function
     only process luma
     ####
-    nsize,nnrs,qual: nnedi3 args
+    nsize,nns,qual: nnedi3 args
     aamode: decide how to aa. 0: merge two deinterlacing fleid ; 1: enlarge video and downscale
     maskmode: 0:no mask ; 1: use the clip before AA to create mask ; 2: use AAed clip to create mask; a video clip: use it as mask
     opencl: if True: use nnedi3cl; else use znedi3
@@ -1955,13 +1964,13 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
         raise ValueError("w,h should less than input resolution")
     
     kernel=kernel.strip().capitalize()
-    if kernel not in ["Debilinear","Debicubic","Delanczos","Despline16","Despline36"]:
+    if kernel not in ["Debilinear","Debicubic","Delanczos","Despline16","Despline36","Despline64"]:
         raise ValueError("unsupport kernel")
     
     src=core.fmtc.bitdepth(src,bits=16)
     luma=getY(src)
     ####
-    if kernel in ["Debilinear","Despline16","Despline36"]:
+    if kernel in ["Debilinear","Despline16","Despline36","Despline64"]:
         luma_de=eval("core.descale.{k}(luma.fmtc.bitdepth(bits=32),w,h)".format(k=kernel))
         luma_up=eval("core.resize.{k}(luma_de,src_w,src_h)".format(k=kernel[2:].capitalize())).fmtc.bitdepth(bits=16,dmode=1)
     elif kernel=="Debicubic":
@@ -1978,7 +1987,14 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
     else:
         raise ValueError("postfilter_descaled must be a function")
 
-    luma_rescale=nnrs.nnedi3_resample(luma_de,src_w,src_h,qual=2,nsize=3).fmtc.bitdepth(bits=16)
+    nsize=3 if args.get("nsize") is None else args.get("nsize")#keep behavior before
+    nns=args.get("nns")
+    qual=2 if args.get("qual") is None else args.get("qual")#keep behavior before
+    etype=args.get("etype")
+    pscrn=args.get("pscrn")
+    exp=args.get("exp")
+
+    luma_rescale=nnrs.nnedi3_resample(luma_de,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp).fmtc.bitdepth(bits=16)
 
     if mask:
         mask=core.std.Expr([luma,luma_up],"x y - abs").std.Binarize(mask_dif_pix*256)
@@ -1998,6 +2014,12 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
         return luma_rescale
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
+
+def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,mask=True,mask_dif_pix=2):
+    #WIP
+    pass
+
+
 
 def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vfm_chroma=True,vfm_block=(16,16),y0=16,y1=16,micmatch=1,cycle=5,vd_chroma=True,dupthresh=1.1,scthresh=15,vd_block=(32,32),pp=True,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
     """
@@ -2305,3 +2327,58 @@ def getsharpness(clip,show=False):
     dif=core.std.PlaneStats(dif)
     last=core.std.ModifyFrame(clip,[dif,clip],calc)
     return core.text.FrameProps(last,"sharpness",scale=2) if show else last
+
+class cropping_args:
+    #rewrite from function descale_cropping_args in getfnative
+    def __init__(self,width:int,height:int,src_height: float, base_height: int, base_width= None, mode: str = 'wh'):
+        assert base_height >= src_height
+        self.mode=mode
+
+        self.width=width
+        self.height=height
+        self.base_width=self.getw(base_height) if base_width is None else base_width
+        self.base_height=self.height
+        self.src_width=src_height * width / height
+        self.src_height=self.base_height
+
+        self.cropped_width=self.base_width - 2 * math.floor((self.base_width - self.src_width) / 2)
+        self.cropped_height=self.base_height - 2 * math.floor((self.base_height - self.src_height) / 2)
+
+    def descale_gen(self):
+        args={"width":self.width,"height":self.height}
+        argsw={"width":self.cropped_width,"src_width":self.src_width,"src_left":(self.cropped_width-self.src_width)/2}
+        argsh={"height":self.cropped_height,"src_height":self.src_height,"src_top":(self.cropped_height-self.src_height)/2}
+
+        if "w" in self.mode:
+            args.update(argsw)
+        if "h" in self.mode:
+            args.update(argsh)
+        return args
+
+    def resize_gen(self):
+        args={"width":self.width,"height":self.height}
+        argsw={"src_width":self.src_width,"src_left":(self.cropped_width-self.src_width)/2}
+        argsh={"src_height":self.src_height,"src_top":(self.cropped_height-self.src_height)/2}
+
+        if "w" in self.mode:
+            args.update(argsw)
+        if "h" in self.mode:
+            args.update(argsh)
+        return args
+
+    def nnrs_gen(self):
+        args={"target_width":self.width,"target_height":self.height}
+        argsw={"src_width":self.src_width,"src_left":(self.cropped_width-self.src_width)/2}
+        argsh={"src_height":self.src_height,"src_top":(self.cropped_height-self.src_height)/2}
+
+        if "w" in self.mode:
+            args.update(argsw)
+        if "h" in self.mode:
+            args.update(argsh)
+        return args
+
+    def getw(self, height: int):
+        width = math.ceil(height * self.width / self.height)
+        if height % 2 == 0:
+            width = width // 2 * 2
+        return width
