@@ -7,9 +7,9 @@ import muvsfunc as muf
 
 import nnedi3_resample as nnrs
 if hasattr(core,"znedi3"):
-    try:
+    if "mode" in nnrs.nnedi3_resample.__code__.co_varnames:
         nnrs.nnedi3_resample=functools.partial(nnrs.nnedi3_resample,mode="znedi3")
-    except:
+    else:
         if "API R4.0" not in core.version():
             try:
                 import znedi3_resample as nnrs
@@ -260,11 +260,6 @@ def FluxsmoothTMC(src,tthr=12,s_p={},a_p={},c_p={},planes=[0,1,2]):
     fs = core.flux.SmoothT(il, temporal_threshold=tthr, planes=planes)
     return core.std.SelectEvery(fs,3,1)
 
-#########################
-#mvfrc
-#########################
-#
-#########################
 def mvfrc(input,it=140,scp=15,num=60000,den=1001,preset='fast',
         pel=2,block=True,flow_mask=None,block_mode=None,
         blksize = 8,blksizev=8,search=None,truemotion=True,searchparam=2,overlap=0,overlapv=None,
