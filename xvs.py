@@ -2415,9 +2415,9 @@ class cropping_args:
         self.width=width
         self.height=height
         self.base_width=self.getw(base_height) if base_width is None else base_width
-        self.base_height=self.height
+        self.base_height=self.base_height
         self.src_width=src_height * width / height
-        self.src_height=self.base_height
+        self.src_height=self.src_height
 
         self.cropped_width=self.base_width - 2 * math.floor((self.base_width - self.src_width) / 2)
         self.cropped_height=self.base_height - 2 * math.floor((self.base_height - self.src_height) / 2)
