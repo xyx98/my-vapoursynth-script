@@ -2399,9 +2399,9 @@ def getsharpness(clip,show=False):
         fout.props["sharpness"]=f[0].props["PlaneStatsAverage"]*65535
         return fout
 
-    luma=getY(clip)
+    luma=getY(clip).fmtc.bitdepth(bits=16)
     blur=core.rgvs.RemoveGrain(luma, 20)
-    dif=core.akarin.Expr([luma,blur],["x y - 65535 / 2 pow 65535 *"])
+    dif=core.akarin.Expr([luma,blur],[f"x y - 65535 / 2 pow 65535 *"])
     dif=core.std.PlaneStats(dif)
     last=core.std.ModifyFrame(clip,[dif,clip],calc)
     return core.text.FrameProps(last,"sharpness",scale=2) if show else last
