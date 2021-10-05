@@ -2010,11 +2010,94 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,mask=True,mask_dif_pix=2):
-    #WIP
-    pass
+def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,selective=False,upper=0.0001,lower=0.00001,**args):
+    #for decimal resolution descale,refer to GetFnative
+    if src.format.color_family not in [vs.YUV,vs.GRAY]:
+        raise ValueError("input clip should be YUV or GRAY!")
 
+    src_h,src_w=src.height,src.width
+    if w is None and h is None:
+        w,h=1280,720
+    elif w is None:
+        w=int(h*src_w/src_h)
+    else:
+        h=int(w*src_h/src_w)
 
+    if bh is None:
+        bh=1080
+
+    if w>=src_w or h>=src_h:
+        raise ValueError("w,h should less than input resolution")
+    
+    kernel=kernel.strip().capitalize()
+    if kernel not in ["Debilinear","Debicubic","Delanczos","Despline16","Despline36","Despline64"]:
+        raise ValueError("unsupport kernel")
+
+    src=core.fmtc.bitdepth(src,bits=16)
+    luma=getY(src)
+    cargs=cropping_args(src.width,src.height,h,bh,bw)
+    ####
+    if kernel in ["Debilinear","Despline16","Despline36","Despline64"]:
+        luma_de=eval("core.descale.{k}(luma.fmtc.bitdepth(bits=32),**cargs.descale_gen())".format(k=kernel))
+        luma_up=eval("core.resize.{k}(luma_de,**cargs.resize_gen())".format(k=kernel[2:].capitalize()))
+    elif kernel=="Debicubic":
+        luma_de=core.descale.Debicubic(luma.fmtc.bitdepth(bits=32),b=args.get("b"),c=args.get("c"),**cargs.descale_gen())
+        luma_up=core.resize.Bicubic(luma_de,filter_param_a=args.get("b"),filter_param_b=args.get("c"),**cargs.resize_gen())
+    else:
+        luma_de=core.descale.Delanczos(luma.fmtc.bitdepth(bits=32),taps=args.get("taps"),**cargs.descale_gen())
+        luma_up=core.resize.Lanczos(luma_de,filter_param_a=args.get("taps"),**cargs.resize_gen())#
+    
+    diff = core.std.Expr([luma.fmtc.bitdepth(bits=32), luma_up], f'x y - abs dup 0.015 > swap 0 ?').std.Crop(10, 10, 10, 10).std.PlaneStats()
+
+    if postfilter_descaled is None:
+        pass
+    elif callable(postfilter_descaled):
+        luma_de=postfilter_descaled(luma_de)
+    else:
+        raise ValueError("postfilter_descaled must be a function")
+
+    nsize=3 if args.get("nsize") is None else args.get("nsize")#keep behavior before
+    nns=args.get("nns")
+    qual=2 if args.get("qual") is None else args.get("qual")#keep behavior before
+    etype=args.get("etype")
+    pscrn=args.get("pscrn")
+    exp=args.get("exp")
+
+    luma_rescale=nnrs.nnedi3_resample(luma_de,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,**cargs.nnrs_gen()).fmtc.bitdepth(bits=16)
+
+    def calc(n,f): 
+        fout=f[1].copy()
+        fout.props["diff"]=f[0].props["PlaneStatsAverage"]
+        return fout
+
+    luma_rescale=core.std.ModifyFrame(luma_rescale,[diff,luma_rescale],calc)
+
+    if mask:
+        mask=core.std.Expr([luma,luma_up.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
+        mask=expand(mask,cycle=2)
+        mask=inpand(mask,cycle=2)
+
+        luma_rescale=core.std.MaskedMerge(luma_rescale,luma,mask)
+    
+    if selective:
+        base=upper-lower
+        #x:rescale y:src
+        expr=f"x.diff {upper} > y x.diff {lower} < x {upper} x.diff -  {base} / y * x.diff {lower} - {base} / x * + ? ?"
+        luma_rescale=core.akarin.Expr([luma_rescale,luma], expr)
+
+    if show=="descale":
+        return luma_de
+    elif show=="mask":
+        return mask
+    elif show=="both":
+        return luma_de,mask
+    elif show=="diff":
+        return core.text.FrameProps(luma_rescale,"diff", scale=2)
+
+    if src.format.color_family==vs.GRAY:
+        return luma_rescale
+    else:
+        return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
 def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vfm_chroma=True,vfm_block=(16,16),y0=16,y1=16,micmatch=1,cycle=5,vd_chroma=True,dupthresh=1.1,scthresh=15,vd_block=(32,32),pp=True,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
     """
