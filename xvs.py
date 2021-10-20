@@ -2205,7 +2205,7 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
 
     return core.fmtc.bitdepth(flt,bits=bits,dmode=dmode)
 
-def SCSharpen(clip:vs.VideoNode,ref:vs.VideoNode,max_sharpen_weight=0.3,clean=True):
+def SCSharpen(clip:vs.VideoNode,ref:vs.VideoNode,max_sharpen_weight=0.3,min_sharpen_weight=0,clean=True):
     """
     Sharpness Considered Sharpen:
     It mainly design for sharpen a bad source after blurry filtered such as strong AA, and source unsuited to be reference when you want sharpen filtered clip to match the sharpness of source.
@@ -2217,6 +2217,9 @@ def SCSharpen(clip:vs.VideoNode,ref:vs.VideoNode,max_sharpen_weight=0.3,clean=Tr
     """
     if max_sharpen_weight >1 or max_sharpen_weight <=0 :
         raise ValueError("max_sharpen_weight should in (0,1]")
+    
+    if min_sharpen_weight >1 or min_sharpen_weight <0  or max_sharpen_weight<min_sharpen_weight:
+        raise ValueError("min_sharpen_weight should in [0,1] and less than max_sharpen_weight")
 
     ref,clip=core.fmtc.bitdepth(ref,bits=16),core.fmtc.bitdepth(clip,bits=16)
     if clip.format.color_family == vs.YUV:
@@ -2243,8 +2246,10 @@ def SCSharpen(clip:vs.VideoNode,ref:vs.VideoNode,max_sharpen_weight=0.3,clean=Tr
     k2=f"z.sharpness x.sharpness - {base} /"
     L1=max_sharpen_weight
     L2=1-L1
+    L3=min_sharpen_weight
+    L4=1-L3
 
-    expr=f" {k1} {L1} > {L1} z * {L2} y * + {k1} z * {k2} y * + ? "
+    expr=f" {k1} {L1} > {L1} z * {L2} y * + {k1} {L3} < {L3} z * {L4} y * + {k1} z * {k2} y * + ? ?"
     last=core.akarin.Expr([ref,last,sharp],expr)
     
     if clean:
