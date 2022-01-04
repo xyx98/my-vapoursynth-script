@@ -1160,7 +1160,7 @@ def statsinfo2csv(clip,plane=None,Max=True,Min=True,Avg=False,bits=8,namebase=No
             plane=[0,1,2]
     elif isinstance(plane,int):
         plane=[plane]
-    elif not isinstance(plane,list,tuple):
+    elif not isinstance(plane,(list,tuple)):
         raise TypeError()
     ###############
     for i in plane:
@@ -2184,10 +2184,10 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
     ps_num1=p1[preset][2] if ps_num1 is None else ps_num1
     ps_range1=p1[preset][3] if ps_range1 is None else ps_range1
 
-    block_step2=p1[preset2][0] if block_step2 is None else block_step2
-    bm_range2=p1[preset2][1] if bm_range2 is None else bm_range2
-    ps_num2=p1[preset2][2] if ps_num2 is None else ps_num2
-    ps_range2=p1[preset2][3] if ps_range2 is None else ps_range2
+    block_step2=p2[preset2][0] if block_step2 is None else block_step2
+    bm_range2=p2[preset2][1] if bm_range2 is None else bm_range2
+    ps_num2=p2[preset2][2] if ps_num2 is None else ps_num2
+    ps_range2=p2[preset2][3] if ps_range2 is None else ps_range2
 
     if isvbm3d:
         flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
