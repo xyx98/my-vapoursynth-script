@@ -443,7 +443,7 @@ def textsub(input,file,charset=None,fps=None,vfr=None,
         Matrix = M(width,height)
     ##############
     def vsmode(clip,file,charset,fps,vfr,mod):
-        core = vs.get_core()
+        core = vs.core
         if mod == False:
             last = core.vsf.TextSub(clip,file,charset,fps,vfr)
         else:
@@ -451,7 +451,7 @@ def textsub(input,file,charset=None,fps=None,vfr=None,
         return core.std.Cache(last, make_linear=True)
 
     def mskE(a,b,depth):
-        core=vs.get_core()
+        core=vs.core
         expr="x y - abs 1 < 0 255 ?"
         last = core.std.Expr([a,b], [expr]*3)
         return core.fmtc.bitdepth(last,bits=depth)
