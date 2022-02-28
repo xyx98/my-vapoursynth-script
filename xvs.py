@@ -2101,7 +2101,7 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
 
 def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vfm_chroma=True,vfm_block=(16,16),y0=16,y1=16,micmatch=1,cycle=5,vd_chroma=True,dupthresh=1.1,scthresh=15,vd_block=(32,32),pp=True,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
     """
-    warp function for vivtc with a simple post-process use nnedi3
+    warp function for vivtc with a simple post-process use nnedi3 or user-defined filter.
     """
     src8=core.fmtc.bitdepth(src,bits=8)
     src16=core.fmtc.bitdepth(src,bits=16)
@@ -2113,7 +2113,11 @@ def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vf
             return match
 
     match=core.vivtc.VFM(src8,order=order,field=field,mode=mode,mchroma=mchroma,cthresh=cthresh,mi=mi,chroma=vfm_chroma,blockx=vfm_block[0],blocky=vfm_block[1],y0=y0,y1=y1,scthresh=scthresh,micmatch=micmatch,clip2=src16)
-    if pp:
+
+    if callable(pp):
+        di=pp(match)
+        match=core.std.FrameEval(match,functools.partial(selector,match=match,di=di),prop_src=match)
+    elif pp:
         di=nnedi3(match,field=order,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=2,mode="nnedi3cl" if opencl else "znedi3")
         match=core.std.FrameEval(match,functools.partial(selector,match=match,di=di),prop_src=match)
 
