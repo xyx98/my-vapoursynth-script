@@ -3,6 +3,7 @@ import vapoursynth as vs
 import mvsfunc as mvf
 import havsfunc as haf
 import re,math,functools,sys,os
+from typing import Optional
 import muvsfunc as muf
 
 import nnedi3_resample as nnrs
@@ -2099,6 +2100,69 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
+def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,**args):
+    clip=core.fmtc.bitdepth(clip,bits=16)
+    luma=getY(clip)
+    src_h,src_w=clip.height,clip.width
+    def getwh(w,h):
+        if w is None and h is None:
+            w,h=1280,720
+        elif w is None:
+            w=int(h*src_w/src_h)
+        elif h is None:
+            h=int(w*src_h/src_w)
+
+        if w>=src_w or h>=src_h:
+            raise ValueError("w,h should less than input resolution")
+        return w,h
+
+    w,h=getwh(w,h)
+
+    info_gobal=f"gobal:\nresolution:{w}x{h}\tmask:{mask}\tmask_dif_pix:{mask_dif_pix}\tpostfilter_descaled:{'yes' if postfilter_descaled else 'no'}\nselective_disable:{selective_disable}\tdisable_thr:{disable_thr:f}\nextra:{str(args)}"
+    rescales=[]
+    total=len(kernels)
+    for i in kernels:
+        k=i["k"][2:]
+        kb,kc,ktaps=i.get("b"),i.get("c"),i.get("taps")
+        kw,kh=i.get("w"),i.get("h")
+        if kw is not None or kh is not None:
+            kw,kh=getwh(kw,kh)
+        else:
+            kw,kh=w,h
+        kmask=mask if i.get("mask") is None else i.get("mask")
+        kmdp=mask_dif_pix if i.get("mask_dif_pix") is None else i.get("mask_dif_pix")
+        kpp=postfilter_descaled if i.get("postfilter_descaled") is None else i.get("postfilter_descaled")
+        multiple=1 if i.get("multiple") is None else i.get("multiple")
+
+        rescales.append(MRcore(luma,kernel=k,w=kw,h=kh,mask=kmask,mask_dif_pix=kmdp,postfilter_descaled=kpp,taps=ktaps,b=kb,c=kc,multiple=multiple,**args))
+
+
+    def selector(n,f,src,clips):
+        kernels_info=[]
+        index,mindiff=0,f[0].props["diff"]
+        for i in range(total):
+            tmpdiff=f[i].props["diff"]
+            kernels_info.append(f"kernel {i}:\t{kernels[i]}\n{tmpdiff:.10f}")
+            if tmpdiff<mindiff:
+                index,tmpdiff=i,tmpdiff
+
+        info=info_gobal+"\n--------------------\n"+("\n--------------------\n").join(kernels_info)+"\n--------------------\ncurrent usage:\n"
+        if selective_disable and mindiff>disable_thr:
+            last=src
+            info+="source"
+        else:
+            last=clips[index]
+            info+=kernels_info[index]
+        if showinfo:
+            last=core.text.Text(last,info.replace("\t","    "))
+        return last
+
+    last=core.std.FrameEval(luma,functools.partial(selector,src=luma,clips=rescales),prop_src=rescales)
+    if clip.format.color_family==vs.GRAY:
+        return last
+    else:
+        return core.std.ShufflePlanes([last,clip],[0,1,2],vs.YUV)
+
 def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vfm_chroma=True,vfm_block=(16,16),y0=16,y1=16,micmatch=1,cycle=5,vd_chroma=True,dupthresh=1.1,scthresh=15,vd_block=(32,32),pp=True,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
     """
     warp function for vivtc with a simple post-process use nnedi3 or user-defined filter.
@@ -2400,6 +2464,51 @@ def bm3d_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=
     else:
         return core.bm3dcuda_rtc.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
     
+
+def resize_core(kernel:str,taps: int,b: float=0,c: float=0):
+    if kernel in ["Bilinear","Spline16","Spline36","Spline64"]:
+        return eval(f"core.resize.{kernel}")
+    elif kernel == "Bicubic":
+        return functools.partial(core.resize.Bicubic,filter_param_a=b,filter_param_b=c)
+    elif kernel == "Lanczos":
+        return functools.partial(core.resize.Lanczos,filter_param_a=taps)
+
+def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: bool=True,mask_dif_pix:float=2,postfilter_descaled=None,taps:int=3,b:float=0,c:float=0.5,multiple:float=1,**args):
+    src_w,src_h=clip.width,clip.height
+    clip32=core.fmtc.bitdepth(clip,bits=32)
+    descaled=core.descale.Descale(clip32,width=w,height=h,kernel=kernel.lower(),taps=taps,b=b,c=c)
+    upscaled=resize_core(kernel.capitalize(),taps,b,c)(descaled,src_w,src_h)
+    diff=core.std.Expr([clip32,upscaled],"x y - abs dup 0.015 > swap 0 ?").std.PlaneStats()
+    
+    def calc(n,f): 
+        fout=f[1].copy()
+        fout.props["diff"]=f[0].props["PlaneStatsAverage"]*multiple
+        return fout
+
+    if postfilter_descaled is None:
+        pass
+    elif callable(postfilter_descaled):
+        descaled=postfilter_descaled(descaled)
+    else:
+        raise ValueError("postfilter_descaled must be a function")
+
+    nsize=3 if args.get("nsize") is None else args.get("nsize")
+    nns=args.get("nns")
+    qual=2 if args.get("qual") is None else args.get("qual")
+    etype=args.get("etype")
+    pscrn=args.get("pscrn")
+    exp=args.get("exp")
+
+    rescale=nnrs.nnedi3_resample(descaled,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp).fmtc.bitdepth(bits=16)
+
+    if mask:
+        mask=core.std.Expr([clip,upscaled.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
+        mask=expand(mask,cycle=2)
+        mask=inpand(mask,cycle=2)
+        rescale=core.std.MaskedMerge(rescale,clip,mask)
+
+    return core.std.ModifyFrame(rescale,[diff,rescale],calc)
+
 
 def getsharpness(clip,show=False):
 
