@@ -2317,7 +2317,7 @@ def SCSharpen(clip:vs.VideoNode,ref:vs.VideoNode,max_sharpen_weight=0.3,min_shar
     L3=min_sharpen_weight
     L4=1-L3
 
-    expr=f" {k1} {L1} > {L1} z * {L2} y * + {k1} {L3} < {L3} z * {L4} y * + {k1} z * {k2} y * + ? ?"
+    expr=f"{base} 0 = {L1} z * {L2} y * + {k1} {L1} > {L1} z * {L2} y * + {k1} {L3} < {L3} z * {L4} y * + {k1} z * {k2} y * + ? ? ?"
     last=core.akarin.Expr([ref,last,sharp],expr)
     
     if clean:
