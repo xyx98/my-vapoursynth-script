@@ -1944,7 +1944,7 @@ def drAA(src,drf=0.5,lraa=True,opencl=False,device=-1,pp=True):
         last= Ylast
     return last
 
-def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,**args):
+def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,mthr:list[int]=[2,2],**args):
     if src.format.color_family not in [vs.YUV,vs.GRAY]:
         raise ValueError("input clip should be YUV or GRAY!")
 
@@ -1994,8 +1994,8 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
 
     if mask:
         mask=core.std.Expr([luma,luma_up],"x y - abs").std.Binarize(mask_dif_pix*256)
-        mask=expand(mask,cycle=2)
-        mask=inpand(mask,cycle=2)
+        mask=expand(mask,cycle=mthr[0])
+        mask=inpand(mask,cycle=mthr[1])
 
         luma_rescale=core.std.MaskedMerge(luma_rescale,luma,mask)
     
@@ -2011,7 +2011,7 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,selective=False,upper=0.0001,lower=0.00001,**args):
+def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,mthr:list[int]=[2,2],selective=False,upper=0.0001,lower=0.00001,**args):
     #for decimal resolution descale,refer to GetFnative
     if src.format.color_family not in [vs.YUV,vs.GRAY]:
         raise ValueError("input clip should be YUV or GRAY!")
@@ -2075,8 +2075,8 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
 
     if mask:
         mask=core.std.Expr([luma,luma_up.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
-        mask=expand(mask,cycle=2)
-        mask=inpand(mask,cycle=2)
+        mask=expand(mask,cycle=mthr[0])
+        mask=inpand(mask,cycle=mthr[1])
 
         luma_rescale=core.std.MaskedMerge(luma_rescale,luma,mask)
     
@@ -2100,7 +2100,7 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,**args):
+def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,mthr:list[int]=[2,2],selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,**args):
     clip=core.fmtc.bitdepth(clip,bits=16)
     luma=getY(clip)
     src_h,src_w=clip.height,clip.width
@@ -2131,10 +2131,11 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
             kw,kh=w,h
         kmask=mask if i.get("mask") is None else i.get("mask")
         kmdp=mask_dif_pix if i.get("mask_dif_pix") is None else i.get("mask_dif_pix")
+        kmthr=mthr if i.get("mthr") is None else i.get("mthr")
         kpp=postfilter_descaled if i.get("postfilter_descaled") is None else i.get("postfilter_descaled")
         multiple=1 if i.get("multiple") is None else i.get("multiple")
 
-        rescales.append(MRcore(luma,kernel=k,w=kw,h=kh,mask=kmask,mask_dif_pix=kmdp,postfilter_descaled=kpp,taps=ktaps,b=kb,c=kc,multiple=multiple,**args))
+        rescales.append(MRcore(luma,kernel=k,w=kw,h=kh,mask=kmask,mask_dif_pix=kmdp,postfilter_descaled=kpp,mthr=kmthr,taps=ktaps,b=kb,c=kc,multiple=multiple,**args))
 
 
     def selector(n,f,src,clips):
@@ -2366,39 +2367,35 @@ def showUV(clip):
     return clip.std.Expr(["0",""])
 
 #inpand/expand
-def inpand(clip=None,planes=0,thr=None,mode="square",cycle=1):
-    if mode=="square":
-        cd=[1,1,1,1,1,1,1,1]
-    elif mode=="horizontal":
-        cd=[0,0,0,1,1,0,0,0]
-    elif mode=="vertical":
-        cd=[0,1,0,0,0,0,1,0]
-    elif mode=="both":
-        cd=[0,1,0,1,1,0,1,0]
-    else:
-        raise TypeError("")
-    last = core.std.Minimum(clip,planes,thr,cd)
-    if cycle<=1:
-        return last
-    else:
-        return inpand(last,planes,thr,mode,cycle-1)
+def inpand(clip:vs.VideoNode,planes=0,thr=None,mode="square",cycle:int=1):
+    modemap={
+        "square":[1,1,1,1,1,1,1,1],
+        "horizontal":[0,0,0,1,1,0,0,0],
+        "vertical":[0,1,0,0,0,0,1,0],
+        "both":[0,1,0,1,1,0,1,0],
+    }
 
-def expand(clip=None,planes=0,thr=None,mode="square",cycle=1):
-    if mode=="square":
-        cd=[1,1,1,1,1,1,1,1]
-    elif mode=="horizontal":
-        cd=[0,0,0,1,1,0,0,0]
-    elif mode=="vertical":
-        cd=[0,1,0,0,0,0,1,0]
-    elif mode=="both":
-        cd=[0,1,0,1,1,0,1,0]
-    else:
-        raise TypeError("")
-    last = core.std.Maximum(clip,planes,thr,cd)
-    if cycle<=1:
-        return last
-    else:
-        return expand(last,planes,thr,mode,cycle-1)
+    if not (cd:=modemap.get(mode)):
+        raise TypeError("unknown mode")
+    
+    for i in range(cycle):
+        clip = core.std.Minimum(clip,planes,thr,cd)
+    return clip
+
+def expand(clip:vs.VideoNode,planes=0,thr=None,mode="square",cycle=1):
+    modemap={
+        "square":[1,1,1,1,1,1,1,1],
+        "horizontal":[0,0,0,1,1,0,0,0],
+        "vertical":[0,1,0,0,0,0,1,0],
+        "both":[0,1,0,1,1,0,1,0],
+    }
+
+    if not (cd:=modemap.get(mode)):
+        raise TypeError("unknown mode")
+    
+    for i in range(cycle):
+        clip = core.std.Maximum(clip,planes,thr,cd)
+    return clip
 
 def getCSS(w,h):
     css={
@@ -2473,7 +2470,7 @@ def resize_core(kernel:str,taps: int,b: float=0,c: float=0):
     elif kernel == "Lanczos":
         return functools.partial(core.resize.Lanczos,filter_param_a=taps)
 
-def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: bool=True,mask_dif_pix:float=2,postfilter_descaled=None,taps:int=3,b:float=0,c:float=0.5,multiple:float=1,**args):
+def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: bool=True,mask_dif_pix:float=2,postfilter_descaled=None,mthr:list[int]=[2,2],taps:int=3,b:float=0,c:float=0.5,multiple:float=1,**args):
     src_w,src_h=clip.width,clip.height
     clip32=core.fmtc.bitdepth(clip,bits=32)
     descaled=core.descale.Descale(clip32,width=w,height=h,kernel=kernel.lower(),taps=taps,b=b,c=c)
@@ -2503,8 +2500,8 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: bool=True,mask_dif_pix
 
     if mask:
         mask=core.std.Expr([clip,upscaled.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
-        mask=expand(mask,cycle=2)
-        mask=inpand(mask,cycle=2)
+        mask=expand(mask,cycle=mthr[0])
+        mask=inpand(mask,cycle=mthr[1])
         rescale=core.std.MaskedMerge(rescale,clip,mask)
 
     return core.std.ModifyFrame(rescale,[diff,rescale],calc)
