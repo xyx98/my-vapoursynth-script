@@ -2192,7 +2192,8 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
             block_step1=None,bm_range1=None, ps_num1=None, ps_range1=None,
             block_step2=None,bm_range2=None, ps_num2=None, ps_range2=None,
             extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT",
-            refine=1,dmode=0):
+            refine=1,dmode=0,
+            v2=False):
     bits=clip.format.bits_per_sample
     clip=core.fmtc.bitdepth(clip,bits=32)
     if chroma is True and clip.format.id !=vs.YUV444PS:
@@ -2258,19 +2259,26 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
     ps_num2=p2[preset2][2] if ps_num2 is None else ps_num2
     ps_range2=p2[preset2][3] if ps_range2 is None else ps_range2
 
-    if isvbm3d:
-        flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
-        flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
-
+    if v2:
+        flt=bm3dv2_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+        
         for i in range(refine):
-            flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+            flt=bm3dv2_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+    
+    else:
+        if isvbm3d:
+            flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
             flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
 
-    else:
-        flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+            for i in range(refine):
+                flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+                flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
 
-        for i in range(refine):
-            flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+        else:
+            flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+
+            for i in range(refine):
+                flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
 
     return core.fmtc.bitdepth(flt,bits=bits,dmode=dmode)
 
@@ -2461,6 +2469,16 @@ def bm3d_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=
     else:
         return core.bm3dcuda_rtc.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
     
+
+def bm3dv2_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=0,ps_num=2,ps_range=4,chroma=False,fast=True,extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT"):
+    if mode not in ["cpu","cuda","cuda_rtc"]:
+        raise ValueError("mode must be cpu,or cuda,or cuda_rtc")
+    elif mode=="cpu":
+        return core.bm3dcpu.BM3Dv2(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma)
+    elif mode=="cuda":
+        return core.bm3dcuda.BM3Dv2(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id)
+    else:
+        return core.bm3dcuda_rtc.BM3Dv2(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
 
 def resize_core(kernel:str,taps: int,b: float=0,c: float=0):
     if kernel in ["Bilinear","Spline16","Spline36","Spline64"]:
