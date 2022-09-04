@@ -7,16 +7,9 @@ from typing import Optional
 import muvsfunc as muf
 
 import nnedi3_resample as nnrs
-if hasattr(core,"znedi3"):
-    if "mode" in nnrs.nnedi3_resample.__code__.co_varnames:
-        nnrs.nnedi3_resample=functools.partial(nnrs.nnedi3_resample,mode="znedi3")
-    else:
-        if "API R4.0" not in core.version():
-            try:
-                import znedi3_resample as nnrs
-            except:
-                pass
-
+nnedi3_resample=nnrs.nnedi3_resample
+if hasattr(core,"znedi3") and "mode" in nnrs.nnedi3_resample.__code__.co_varnames:
+        nnedi3_resample=functools.partial(nnrs.nnedi3_resample,mode="znedi3")
 
 
 
@@ -1990,7 +1983,7 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
     pscrn=args.get("pscrn")
     exp=args.get("exp")
 
-    luma_rescale=nnrs.nnedi3_resample(luma_de,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp).fmtc.bitdepth(bits=16)
+    luma_rescale=nnedi3_resample(luma_de,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp).fmtc.bitdepth(bits=16)
 
     if mask:
         mask=core.std.Expr([luma,luma_up],"x y - abs").std.Binarize(mask_dif_pix*256)
@@ -2064,7 +2057,7 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
     pscrn=args.get("pscrn")
     exp=args.get("exp")
 
-    luma_rescale=nnrs.nnedi3_resample(luma_de,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,**cargs.nnrs_gen()).fmtc.bitdepth(bits=16)
+    luma_rescale=nnedi3_resample(luma_de,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,**cargs.nnrs_gen()).fmtc.bitdepth(bits=16)
 
     def calc(n,f): 
         fout=f[1].copy()
@@ -2183,10 +2176,35 @@ def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vf
         di=pp(match)
         match=core.std.FrameEval(match,functools.partial(selector,match=match,di=di),prop_src=match)
     elif pp:
-        di=nnedi3(match,field=order,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=2,mode="nnedi3cl" if opencl else "znedi3")
+        di=nnedi3(match,field=order,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,mode="nnedi3cl" if opencl else "znedi3",device=device)
         match=core.std.FrameEval(match,functools.partial(selector,match=match,di=di),prop_src=match)
 
     return core.vivtc.VDecimate(match,cycle=cycle,chroma=vd_chroma,dupthresh=dupthresh,scthresh=scthresh,blockx=vd_block[0],blocky=vd_block[1])
+
+def ivtc_t(src:vs.VideoNode,order:int=1,field:int=-1,mode:int=1,slow:int=1,mchroma:bool=True,y0:int=16,y1:int=16,scthresh:float=12.0,ubsco:bool=True,micmatching:int=1,mmsco:bool=True,cthresh:int=9,tfm_chroma:bool=True,tfm_block:list[int]=[16,16],mi:int=80,metric:int=0,mthresh:int=5,
+    td_mode:int=0,cycleR:int=1,cycle:int=1,rate:float=24000/1001,hybrid:int=0,vfrdec:int=1,dupThresh:float=None,vidThresh:float=None,sceneThresh:float=15,vidDetect:int=3,conCycle:int=None,conCycleTP:int=None,nt:int=0,vd_block:list[int]=[32,32],tcfv1:bool=True,se:bool=False,vd_chroma:bool=True,noblend:bool=True,maxndl:int=None,m2PA:bool=False,denoise:bool=False,ssd:bool=False,sdlim:int=0,
+    pp=-1,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
+    """
+    warp function for tivtc with a simple post-process use nnedi3 or user-defined filter.
+    use pp=-1(default) to use nnedi3 or pp>0 to use tfm internal post-process.
+    """
+
+    def selector(n,f,match,di):
+        if f.props["_Combed"]>0:
+            return di
+        else:
+            return match
+       
+    match=core.tivtc.TFM(src,order=order,field=field,mode=mode,pp=pp if pp>0 else 0,slow=slow,mChroma=mchroma,cthresh=cthresh,MI=mi,chroma=tfm_chroma,blockx=tfm_block[0],blocky=tfm_block[1],y0=y0,y1=y1,mthresh=mthresh,scthresh=scthresh,micmatching=micmatching,metric=metric,mmsco=mmsco,ubsco=ubsco)
+    
+    if callable(pp):
+        di=pp(match)
+        match=core.std.FrameEval(match,functools.partial(selector,match=match,di=di),prop_src=match)
+    elif pp==-1:
+        di=nnedi3(match,field=order,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,mode="nnedi3cl" if opencl else "znedi3",device=device)
+        match=core.std.FrameEval(match,functools.partial(selector,match=match,di=di),prop_src=match)
+
+    return core.tivtc.TDecimate(match,mode=td_mode,cycleR=cycleR,cycle=cycle,rate=rate,dupThresh=dupThresh,vidDetect=vidDetect,vidThresh=vidThresh,sceneThresh=sceneThresh,hybrid=hybrid,conCycle=conCycle,conCycleTP=conCycleTP,nt=nt,blockx=vd_block[0],blocky=vd_block[1],tcfv1=tcfv1,se=se,chroma=vd_chroma,noblend=noblend,maxndl=maxndl,m2PA=m2PA,denoise=denoise,ssd=ssd,sdlim=sdlim,vfrDec=vfrdec)
 
 def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,mode="cpu",radius=0,chroma=False,fast=True,
             block_step1=None,bm_range1=None, ps_num1=None, ps_range1=None,
@@ -2514,7 +2532,7 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: bool=True,mask_dif_pix
     pscrn=args.get("pscrn")
     exp=args.get("exp")
 
-    rescale=nnrs.nnedi3_resample(descaled,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp).fmtc.bitdepth(bits=16)
+    rescale=nnedi3_resample(descaled,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp).fmtc.bitdepth(bits=16)
 
     if mask:
         mask=core.std.Expr([clip,upscaled.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
