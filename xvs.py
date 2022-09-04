@@ -3,7 +3,7 @@ import vapoursynth as vs
 import mvsfunc as mvf
 import havsfunc as haf
 import re,math,functools,sys,os
-from typing import Optional
+from typing import Optional, Union
 import muvsfunc as muf
 
 import nnedi3_resample as nnrs
@@ -1937,7 +1937,7 @@ def drAA(src,drf=0.5,lraa=True,opencl=False,device=-1,pp=True):
         last= Ylast
     return last
 
-def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,mthr:list[int]=[2,2],**args):
+def rescale(src:vs.VideoNode,kernel:str,w:int=None,h:int=None,mask:Union[bool,vs.VideoNode]=True,mask_dif_pix:float=2,show: str="result",postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,**args):
     if src.format.color_family not in [vs.YUV,vs.GRAY]:
         raise ValueError("input clip should be YUV or GRAY!")
 
@@ -1958,6 +1958,19 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
     
     src=core.fmtc.bitdepth(src,bits=16)
     luma=getY(src)
+
+    taps=args.get("taps")
+    b,c=args.get("b"),args.get("c")
+    nsize=3 if args.get("nsize") is None else args.get("nsize")#keep behavior before
+    nns=args.get("nns")
+    qual=2 if args.get("qual") is None else args.get("qual")#keep behavior before
+    etype=args.get("etype")
+    pscrn=args.get("pscrn")
+    exp=args.get("exp")
+    sigmoid=args.get("sigmoid")
+
+    luma_rescale,mask,luma_de=MRcore(luma,kernel[2:],w,h,mask=mask,mask_dif_pix=mask_dif_pix,postfilter_descaled=postfilter_descaled,mthr=mthr,taps=taps,b=b,c=c,multiple=1,maskpp=maskpp,show="both",nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,sigmoid=sigmoid)
+    """
     ####
     if kernel in ["Debilinear","Despline16","Despline36","Despline64"]:
         luma_de=eval("core.descale.{k}(luma.fmtc.bitdepth(bits=32),w,h)".format(k=kernel))
@@ -1991,7 +2004,7 @@ def rescale(src:vs.VideoNode,kernel:str,w=None,h=None,mask=True,mask_dif_pix=2,s
         mask=inpand(mask,cycle=mthr[1])
 
         luma_rescale=core.std.MaskedMerge(luma_rescale,luma,mask)
-    
+    """
     if show=="descale":
         return luma_de
     elif show=="mask":
@@ -2506,7 +2519,7 @@ def resize_core(kernel:str,taps: int,b: float=0,c: float=0):
     elif kernel == "Lanczos":
         return functools.partial(core.resize.Lanczos,filter_param_a=taps)
 
-def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: bool=True,mask_dif_pix:float=2,postfilter_descaled=None,mthr:list[int]=[2,2],taps:int=3,b:float=0,c:float=0.5,multiple:float=1,**args):
+def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: Union[bool,vs.VideoNode]=True,mask_dif_pix:float=2,postfilter_descaled=None,mthr:list[int]=[2,2],taps:int=3,b:float=0,c:float=0.5,multiple:float=1,maskpp=None,show:str="result",**args):
     src_w,src_h=clip.width,clip.height
     clip32=core.fmtc.bitdepth(clip,bits=32)
     descaled=core.descale.Descale(clip32,width=w,height=h,kernel=kernel.lower(),taps=taps,b=b,c=c)
@@ -2536,11 +2549,22 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: bool=True,mask_dif_pix
 
     if mask:
         mask=core.std.Expr([clip,upscaled.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
-        mask=expand(mask,cycle=mthr[0])
-        mask=inpand(mask,cycle=mthr[1])
+        if callable(maskpp):
+            mask=maskpp(mask)
+        else:
+            mask=expand(mask,cycle=mthr[0])
+            mask=inpand(mask,cycle=mthr[1])
         rescale=core.std.MaskedMerge(rescale,clip,mask)
 
-    return core.std.ModifyFrame(rescale,[diff,rescale],calc)
+    if show.lower()=="result":
+        return core.std.ModifyFrame(rescale,[diff,rescale],calc)
+    elif show.lower()=="mask" and mask:
+        return core.std.ModifyFrame(mask,[diff,mask],calc)
+    elif show.lower()=="descale":
+        return descaled #after postfilter_descaled
+    elif show.lower()=="both": #result,mask,descaled
+        return core.std.ModifyFrame(rescale,[diff,rescale],calc),core.std.ModifyFrame(mask,[diff,mask],calc),descaled
+
 
 
 def getsharpness(clip,show=False):
@@ -2556,6 +2580,7 @@ def getsharpness(clip,show=False):
     dif=core.std.PlaneStats(dif)
     last=core.std.ModifyFrame(clip,[dif,clip],calc)
     return core.text.FrameProps(last,"sharpness",scale=2) if show else last
+
 
 class cropping_args:
     #rewrite from function descale_cropping_args in getfnative
