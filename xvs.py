@@ -1938,6 +1938,20 @@ def drAA(src,drf=0.5,lraa=True,opencl=False,device=-1,pp=True):
     return last
 
 def rescale(src:vs.VideoNode,kernel:str,w:int=None,h:int=None,mask:Union[bool,vs.VideoNode]=True,mask_dif_pix:float=2,show: str="result",postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,**args):
+    """
+    descale to target resolution and upscale by nnedi3_resample with optional mask and postfilter.
+    -----------------------------------------------------------
+    kernel:must in ["Debilinear","Debicubic","Delanczos","Despline16","Despline36","Despline64"]
+    w,h:target resolution for descale
+    mask:True to enable internal mask,or input your clip as mask.
+    mask_dif_pix: set protection strength.This value means the threshold of difference to consider as native high resolution,calculate under 8bit.
+    mthr:set [expand,inpand] times for mask
+    maskpp:use self-defined function to replace internal expand and inpand process for mask.
+    postfilter_descaled:self-defined postfilter for descaled clip.
+    #################################
+    b,c,taps:parameters for kernel
+    nsize,nns,qual,etype,pscrn,exp,sigmoid:parameters for nnedi3_resample
+    """
     if src.format.color_family not in [vs.YUV,vs.GRAY]:
         raise ValueError("input clip should be YUV or GRAY!")
 
@@ -2544,8 +2558,9 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: Union[bool,vs.VideoNod
     etype=args.get("etype")
     pscrn=args.get("pscrn")
     exp=args.get("exp")
+    sigmoid=args.get("sigmoid")
 
-    rescale=nnedi3_resample(descaled,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp).fmtc.bitdepth(bits=16)
+    rescale=nnedi3_resample(descaled,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,sigmoid=sigmoid).fmtc.bitdepth(bits=16)
 
     if mask:
         mask=core.std.Expr([clip,upscaled.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
