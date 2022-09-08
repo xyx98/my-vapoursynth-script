@@ -1984,41 +1984,7 @@ def rescale(src:vs.VideoNode,kernel:str,w:int=None,h:int=None,mask:Union[bool,vs
     sigmoid=args.get("sigmoid")
 
     luma_rescale,mask,luma_de=MRcore(luma,kernel[2:],w,h,mask=mask,mask_dif_pix=mask_dif_pix,postfilter_descaled=postfilter_descaled,mthr=mthr,taps=taps,b=b,c=c,multiple=1,maskpp=maskpp,show="both",nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,sigmoid=sigmoid)
-    """
-    ####
-    if kernel in ["Debilinear","Despline16","Despline36","Despline64"]:
-        luma_de=eval("core.descale.{k}(luma.fmtc.bitdepth(bits=32),w,h)".format(k=kernel))
-        luma_up=eval("core.resize.{k}(luma_de,src_w,src_h)".format(k=kernel[2:].capitalize())).fmtc.bitdepth(bits=16,dmode=1)
-    elif kernel=="Debicubic":
-        luma_de=core.descale.Debicubic(luma.fmtc.bitdepth(bits=32),w,h,b=args.get("b"),c=args.get("c"))
-        luma_up=core.resize.Bicubic(luma_de,src_w,src_h,filter_param_a=args.get("b"),filter_param_b=args.get("c")).fmtc.bitdepth(bits=16,dmode=1)
-    else:
-        luma_de=core.descale.Delanczos(luma.fmtc.bitdepth(bits=32),w,h,taps=args.get("taps"))
-        luma_up=core.resize.Lanczos(luma_de,src_w,src_h,filter_param_a=args.get("taps")).fmtc.bitdepth(bits=16,dmode=1)
     
-    if postfilter_descaled is None:
-        pass
-    elif callable(postfilter_descaled):
-        luma_de=postfilter_descaled(luma_de)
-    else:
-        raise ValueError("postfilter_descaled must be a function")
-
-    nsize=3 if args.get("nsize") is None else args.get("nsize")#keep behavior before
-    nns=args.get("nns")
-    qual=2 if args.get("qual") is None else args.get("qual")#keep behavior before
-    etype=args.get("etype")
-    pscrn=args.get("pscrn")
-    exp=args.get("exp")
-
-    luma_rescale=nnedi3_resample(luma_de,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp).fmtc.bitdepth(bits=16)
-
-    if mask:
-        mask=core.std.Expr([luma,luma_up],"x y - abs").std.Binarize(mask_dif_pix*256)
-        mask=expand(mask,cycle=mthr[0])
-        mask=inpand(mask,cycle=mthr[1])
-
-        luma_rescale=core.std.MaskedMerge(luma_rescale,luma,mask)
-    """
     if show=="descale":
         return luma_de
     elif show=="mask":
@@ -2222,7 +2188,7 @@ def ivtc_t(src:vs.VideoNode,order:int=1,field:int=-1,mode:int=1,slow:int=1,mchro
         else:
             return match
        
-    match=core.tivtc.TFM(src,order=order,field=field,mode=mode,pp=pp if pp>0 else 0,slow=slow,mChroma=mchroma,cthresh=cthresh,MI=mi,chroma=tfm_chroma,blockx=tfm_block[0],blocky=tfm_block[1],y0=y0,y1=y1,mthresh=mthresh,scthresh=scthresh,micmatching=micmatching,metric=metric,mmsco=mmsco,ubsco=ubsco)
+    match=core.tivtc.TFM(src,order=order,field=field,mode=mode,PP=pp if pp>0 else 0,slow=slow,mChroma=mchroma,cthresh=cthresh,MI=mi,chroma=tfm_chroma,blockx=tfm_block[0],blocky=tfm_block[1],y0=y0,y1=y1,mthresh=mthresh,scthresh=scthresh,micmatching=micmatching,metric=metric,mmsco=mmsco,ubsco=ubsco)
     
     if callable(pp):
         di=pp(match)
@@ -2233,18 +2199,30 @@ def ivtc_t(src:vs.VideoNode,order:int=1,field:int=-1,mode:int=1,slow:int=1,mchro
 
     return core.tivtc.TDecimate(match,mode=td_mode,cycleR=cycleR,cycle=cycle,rate=rate,dupThresh=dupThresh,vidDetect=vidDetect,vidThresh=vidThresh,sceneThresh=sceneThresh,hybrid=hybrid,conCycle=conCycle,conCycleTP=conCycleTP,nt=nt,blockx=vd_block[0],blocky=vd_block[1],tcfv1=tcfv1,se=se,chroma=vd_chroma,noblend=noblend,maxndl=maxndl,m2PA=m2PA,denoise=denoise,ssd=ssd,sdlim=sdlim,vfrDec=vfrdec)
 
-def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,mode="cpu",radius=0,chroma=False,fast=True,
+def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,mode="cpu",radius=0,radius2=None,chroma=False,fast=True,
             block_step1=None,bm_range1=None, ps_num1=None, ps_range1=None,
             block_step2=None,bm_range2=None, ps_num2=None, ps_range2=None,
             extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT",
             refine=1,dmode=0,
             v2=False):
+    """
+    warp function for bm3dcpu,bm3dcuda,and bm3dcuda_rtc,similar to mvs.bm3d but only main function(without colorspace tranform)
+    due to difference  between bm3d and bm3d{cpu,cuda,cuda_rtc},result will not match mvf.bm3d
+    -------------------------------------------------------------------------
+    preset,preset2:set preset for basic estimate and final estimate.Supported value:fast,lc,np,high
+    v2:True means use bm3dv2,for vbm3d,it should slightly faster
+    For more info about other parameters,read bm3d{cpu,cuda,cuda_rtc}'s doc.
+    """
     bits=clip.format.bits_per_sample
     clip=core.fmtc.bitdepth(clip,bits=32)
     if chroma is True and clip.format.id !=vs.YUV444PS:
         raise ValueError("chroma=True only works on yuv444")
     
+    if radius2 is None:
+        radius2=radius
+
     isvbm3d=radius>0
+    isvbm3d2=radius2>0
 
     if sigma2 is None:
         sigma2=sigma
@@ -2287,12 +2265,8 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
         "high":[2,16,2,8],
     }
 
-
-    if isvbm3d:
-        p1,p2=vparmas1,vparmas2
-    else:
-        p1,p2=parmas1,parmas2
-
+    p1=vparmas1 if isvbm3d  else parmas1
+    p2=vparmas2 if isvbm3d2 else parmas2
     
     block_step1=p1[preset][0] if block_step1 is None else block_step1
     bm_range1=p1[preset][1] if bm_range1 is None else bm_range1
@@ -2314,16 +2288,23 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
         if isvbm3d:
             flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
             flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
-
-            for i in range(refine):
-                flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
-                flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
+            if isvbm3d2:
+                for _ in range(refine):
+                    flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+                    flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
+            else:
+                for _ in range(refine):
+                    flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
 
         else:
             flt=bm3d_core(clip,mode=mode,sigma=sigma,radius=radius,block_step=block_step1,bm_range=bm_range1,ps_num=ps_num1,ps_range=ps_range1,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
-
-            for i in range(refine):
-                flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+            if isvbm3d2:
+                for _ in range(refine):
+                    flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+                    flt=core.bm3d.VAggregate(flt,radius=radius,sample=1)
+            else:    
+                for _ in range(refine):
+                    flt=bm3d_core(clip,ref=flt,mode=mode,sigma=sigma2,radius=radius,block_step=block_step2,bm_range=bm_range2,ps_num=ps_num2,ps_range=ps_range2,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
 
     return core.fmtc.bitdepth(flt,bits=bits,dmode=dmode)
 
@@ -2525,7 +2506,8 @@ def bm3dv2_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radiu
     else:
         return core.bm3dcuda_rtc.BM3Dv2(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
 
-def resize_core(kernel:str,taps: int,b: float=0,c: float=0):
+def resize_core(kernel:str,taps: int=3,b: float=0,c: float=0):
+    kernel=kernel.capitalize()
     if kernel in ["Bilinear","Spline16","Spline36","Spline64"]:
         return eval(f"core.resize.{kernel}")
     elif kernel == "Bicubic":
@@ -2562,7 +2544,7 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: Union[bool,vs.VideoNod
 
     rescale=nnedi3_resample(descaled,src_w,src_h,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,sigmoid=sigmoid).fmtc.bitdepth(bits=16)
 
-    if mask:
+    if mask is True:
         mask=core.std.Expr([clip,upscaled.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
         if callable(maskpp):
             mask=maskpp(mask)
@@ -2570,6 +2552,12 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: Union[bool,vs.VideoNod
             mask=expand(mask,cycle=mthr[0])
             mask=inpand(mask,cycle=mthr[1])
         rescale=core.std.MaskedMerge(rescale,clip,mask)
+    elif isinstance(mask,vs.VideoNode):
+        if mask.width!=src_w or mask.height!=src_h or mask.format.color_family!=vs.GRAY:
+            raise ValueError("mask should have same resolution as source,and should be GRAY")
+        mask=core.fmtc.bitdepth(mask,bits=16,dmode=1)
+        rescale=core.std.MaskedMerge(rescale,clip,mask)
+
 
     if show.lower()=="result":
         return core.std.ModifyFrame(rescale,[diff,rescale],calc)
