@@ -2175,7 +2175,7 @@ def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vf
     return core.vivtc.VDecimate(match,cycle=cycle,chroma=vd_chroma,dupthresh=dupthresh,scthresh=scthresh,blockx=vd_block[0],blocky=vd_block[1])
 
 def ivtc_t(src:vs.VideoNode,order:int=1,field:int=-1,mode:int=1,slow:int=1,mchroma:bool=True,y0:int=16,y1:int=16,scthresh:float=12.0,ubsco:bool=True,micmatching:int=1,mmsco:bool=True,cthresh:int=9,tfm_chroma:bool=True,tfm_block:list[int]=[16,16],mi:int=80,metric:int=0,mthresh:int=5,
-    td_mode:int=0,cycleR:int=1,cycle:int=1,rate:float=24000/1001,hybrid:int=0,vfrdec:int=1,dupThresh:float=None,vidThresh:float=None,sceneThresh:float=15,vidDetect:int=3,conCycle:int=None,conCycleTP:int=None,nt:int=0,vd_block:list[int]=[32,32],tcfv1:bool=True,se:bool=False,vd_chroma:bool=True,noblend:bool=True,maxndl:int=None,m2PA:bool=False,denoise:bool=False,ssd:bool=False,sdlim:int=0,
+    td_mode:int=0,cycleR:int=1,cycle:int=5,rate:float=24000/1001,hybrid:int=0,vfrdec:int=1,dupThresh:float=None,vidThresh:float=None,sceneThresh:float=15,vidDetect:int=3,conCycle:int=None,conCycleTP:int=None,nt:int=0,vd_block:list[int]=[32,32],tcfv1:bool=True,se:bool=False,vd_chroma:bool=True,noblend:bool=True,maxndl:int=None,m2PA:bool=False,denoise:bool=False,ssd:bool=False,sdlim:int=0,
     pp=-1,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
     """
     warp function for tivtc with a simple post-process use nnedi3 or user-defined filter.
@@ -2188,7 +2188,7 @@ def ivtc_t(src:vs.VideoNode,order:int=1,field:int=-1,mode:int=1,slow:int=1,mchro
         else:
             return match
        
-    match=core.tivtc.TFM(src,order=order,field=field,mode=mode,PP=pp if pp>0 else 0,slow=slow,mChroma=mchroma,cthresh=cthresh,MI=mi,chroma=tfm_chroma,blockx=tfm_block[0],blocky=tfm_block[1],y0=y0,y1=y1,mthresh=mthresh,scthresh=scthresh,micmatching=micmatching,metric=metric,mmsco=mmsco,ubsco=ubsco)
+    match=core.tivtc.TFM(src,order=order,field=field,mode=mode,PP=pp if isinstance(pp,int) and pp>0 else 0,slow=slow,mChroma=mchroma,cthresh=cthresh,MI=mi,chroma=tfm_chroma,blockx=tfm_block[0],blocky=tfm_block[1],y0=y0,y1=y1,mthresh=mthresh,scthresh=scthresh,micmatching=micmatching,metric=metric,mmsco=mmsco,ubsco=ubsco)
     
     if callable(pp):
         di=pp(match)
@@ -2557,7 +2557,8 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: Union[bool,vs.VideoNod
             raise ValueError("mask should have same resolution as source,and should be GRAY")
         mask=core.fmtc.bitdepth(mask,bits=16,dmode=1)
         rescale=core.std.MaskedMerge(rescale,clip,mask)
-
+    else:
+        mask=core.std.BlankClip(rescale)
 
     if show.lower()=="result":
         return core.std.ModifyFrame(rescale,[diff,rescale],calc)
