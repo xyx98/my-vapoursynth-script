@@ -1757,12 +1757,13 @@ def mwlmask(clip, l1=80, h1=96, h2=None, l2=None):
     clip = clip.std.Expr(expr)
     return clip
 
-def mwdbmask(clip, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0, cs_v=0, lmask=None, sigma2=2.5, t_h2=3.0, t_l2=1.5):
+def mwdbmask(clip: vs.VideoNode, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0, cs_v=0, lmask=None, sigma2=2.5, t_h2=3.0, t_l2=1.5):
     """
     deband mask
     Steal from other one's script. Most likely written by mawen1250.
     """
     ## clip properties
+    bits=clip.format.bits_per_sample
     yuv420 = clip.format.subsampling_w == 1 and clip.format.subsampling_h == 1
     sw = clip.width
     sh = clip.height
@@ -1779,7 +1780,7 @@ def mwdbmask(clip, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0
         emaskC = mvf.Max(mvf.GetPlane(emask, 1), mvf.GetPlane(emask, 2))
         if yuv420:
             emaskC = haf.mt_inpand_multi(haf.mt_expand_multi(emaskC, 'losange', sw=3, sh=3), 'rectangle', sw=3, sh=3)
-            emaskC = emaskC.fmtc.resample(sw, sh, 0.25 - cs_h / 2, 0 - cs_v / 2, kernel='bilinear', fulls=True)
+            emaskC = emaskC.fmtc.resample(sw, sh, 0.25 - cs_h / 2, 0 - cs_v / 2, kernel='bilinear', fulls=True).fmtc.bitdepth(bits=bits)
         else:
             emaskY = mvf.Max(emaskY, emaskC)
     emaskY = haf.mt_inpand_multi(haf.mt_expand_multi(emaskY, 'losange', sw=5, sh=5), 'rectangle', sw=2, sh=2)
@@ -1792,7 +1793,7 @@ def mwdbmask(clip, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0
         dbmask = haf.mt_inflate_multi(dbmask, radius=2)
         dbmaskC = dbmask
     else:
-        dbmaskC = dbmask.fmtc.resample(sw // 2, sh // 2, -0.5, 0, kernel='bilinear')
+        dbmaskC = dbmask.fmtc.resample(sw // 2, sh // 2, -0.5, 0, kernel='bilinear').fmtc.bitdepth(bits=bits)
         dbmask = haf.mt_inflate_multi(dbmask, radius=2)
     dbmask = core.std.ShufflePlanes([dbmask, dbmaskC, dbmaskC], [0,0,0], vs.YUV)
     return dbmask
