@@ -1998,7 +1998,7 @@ def rescale(src:vs.VideoNode,kernel:str,w:int=None,h:int=None,mask:Union[bool,vs
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,mthr:list[int]=[2,2],selective=False,upper=0.0001,lower=0.00001,**args):
+def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,selective=False,upper=0.0001,lower=0.00001,**args):
     #for decimal resolution descale,refer to GetFnative
     if src.format.color_family not in [vs.YUV,vs.GRAY]:
         raise ValueError("input clip should be YUV or GRAY!")
@@ -2011,8 +2011,11 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
     else:
         h=int(w*src_h/src_w)
 
+    if w>=src_w or h>=src_h:
+        raise ValueError("w,h should less than input resolution")
+
     if bh is None:
-        bh=1080
+        bh=src_h
 
     if w>=src_w or h>=src_h:
         raise ValueError("w,h should less than input resolution")
@@ -2023,50 +2026,19 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
 
     src=core.fmtc.bitdepth(src,bits=16)
     luma=getY(src)
-    cargs=cropping_args(src.width,src.height,h,bh,bw)
-    ####
-    if kernel in ["Debilinear","Despline16","Despline36","Despline64"]:
-        luma_de=eval("core.descale.{k}(luma.fmtc.bitdepth(bits=32),**cargs.descale_gen())".format(k=kernel))
-        luma_up=eval("core.resize.{k}(luma_de,**cargs.resize_gen())".format(k=kernel[2:].capitalize()))
-    elif kernel=="Debicubic":
-        luma_de=core.descale.Debicubic(luma.fmtc.bitdepth(bits=32),b=args.get("b"),c=args.get("c"),**cargs.descale_gen())
-        luma_up=core.resize.Bicubic(luma_de,filter_param_a=args.get("b"),filter_param_b=args.get("c"),**cargs.resize_gen())
-    else:
-        luma_de=core.descale.Delanczos(luma.fmtc.bitdepth(bits=32),taps=args.get("taps"),**cargs.descale_gen())
-        luma_up=core.resize.Lanczos(luma_de,filter_param_a=args.get("taps"),**cargs.resize_gen())#
-    
-    diff = core.std.Expr([luma.fmtc.bitdepth(bits=32), luma_up], f'x y - abs dup 0.015 > swap 0 ?').std.Crop(10, 10, 10, 10).std.PlaneStats()
 
-    if postfilter_descaled is None:
-        pass
-    elif callable(postfilter_descaled):
-        luma_de=postfilter_descaled(luma_de)
-    else:
-        raise ValueError("postfilter_descaled must be a function")
-
+    taps=args.get("taps")
+    b,c=args.get("b"),args.get("c")
     nsize=3 if args.get("nsize") is None else args.get("nsize")#keep behavior before
     nns=args.get("nns")
     qual=2 if args.get("qual") is None else args.get("qual")#keep behavior before
     etype=args.get("etype")
     pscrn=args.get("pscrn")
     exp=args.get("exp")
+    sigmoid=args.get("sigmoid")
 
-    luma_rescale=nnedi3_resample(luma_de,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,**cargs.nnrs_gen()).fmtc.bitdepth(bits=16)
+    luma_rescale,mask,luma_de=MRcoref(luma,kernel[2:],w,h,bh,bw,mask=mask,mask_dif_pix=mask_dif_pix,postfilter_descaled=postfilter_descaled,mthr=mthr,taps=taps,b=b,c=c,multiple=1,maskpp=maskpp,show="both",nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,sigmoid=sigmoid)
 
-    def calc(n,f): 
-        fout=f[1].copy()
-        fout.props["diff"]=f[0].props["PlaneStatsAverage"]
-        return fout
-
-    luma_rescale=core.std.ModifyFrame(luma_rescale,[diff,luma_rescale],calc)
-
-    if mask:
-        mask=core.std.Expr([luma,luma_up.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
-        mask=expand(mask,cycle=mthr[0])
-        mask=inpand(mask,cycle=mthr[1])
-
-        luma_rescale=core.std.MaskedMerge(luma_rescale,luma,mask)
-    
     if selective:
         base=upper-lower
         #x:rescale y:src
@@ -2079,15 +2051,13 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
         return mask
     elif show=="both":
         return luma_de,mask
-    elif show=="diff":
-        return core.text.FrameProps(luma_rescale,"diff", scale=2)
 
     if src.format.color_family==vs.GRAY:
         return luma_rescale
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,mthr:list[int]=[2,2],selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,**args):
+def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,**args):
     clip=core.fmtc.bitdepth(clip,bits=16)
     luma=getY(clip)
     src_h,src_w=clip.height,clip.width
@@ -2105,10 +2075,11 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
 
     w,h=getwh(w,h)
 
-    info_gobal=f"gobal:\nresolution:{w}x{h}\tmask:{mask}\tmask_dif_pix:{mask_dif_pix}\tpostfilter_descaled:{'yes' if postfilter_descaled else 'no'}\nselective_disable:{selective_disable}\tdisable_thr:{disable_thr:f}\nextra:{str(args)}"
+    info_gobal=f"gobal:\nresolution:{w}x{h}\tmask:{mask}\tmask_dif_pix:{mask_dif_pix}\tpostfilter_descaled:{'yes' if callable(postfilter_descaled) else 'no'}\nselective_disable:{selective_disable}\tdisable_thr:{disable_thr:f}\nmthr:{str(mthr)}\tmaskpp:{'yes' if callable(maskpp) else 'no'}\nextra:{str(args)}"
     rescales=[]
     total=len(kernels)
     for i in kernels:
+        fmode=False if i.get("fmode") is None else i.get("fmode")
         k=i["k"][2:]
         kb,kc,ktaps=i.get("b"),i.get("c"),i.get("taps")
         kw,kh=i.get("w"),i.get("h")
@@ -2121,12 +2092,21 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
         kmthr=mthr if i.get("mthr") is None else i.get("mthr")
         kpp=postfilter_descaled if i.get("postfilter_descaled") is None else i.get("postfilter_descaled")
         multiple=1 if i.get("multiple") is None else i.get("multiple")
+        kmaskpp=maskpp if i.get("maskpp") is None else i.get("maskpp")
 
-        rescales.append(MRcore(luma,kernel=k,w=kw,h=kh,mask=kmask,mask_dif_pix=kmdp,postfilter_descaled=kpp,mthr=kmthr,taps=ktaps,b=kb,c=kc,multiple=multiple,**args))
+
+        if not fmode:
+            rescales.append(MRcore(luma,kernel=k,w=kw,h=kh,mask=kmask,mask_dif_pix=kmdp,postfilter_descaled=kpp,mthr=kmthr,taps=ktaps,b=kb,c=kc,multiple=multiple,maskpp=kmaskpp,**args))
+        else:
+            kbh=src_h if i.get("bh") is None else i.get("bh")
+            kbw=i.get("bw")
+            rescales.append(MRcoref(luma,kernel=k,w=kw,h=kh,bh=kbh,bw=kbw,mask=kmask,mask_dif_pix=kmdp,postfilter_descaled=kpp,mthr=kmthr,taps=ktaps,b=kb,c=kc,multiple=multiple,maskpp=kmaskpp,**args))
 
 
     def selector(n,f,src,clips):
         kernels_info=[]
+        if len(f)==1:
+            f=[f]
         index,mindiff=0,f[0].props["diff"]
         for i in range(total):
             tmpdiff=f[i].props["diff"]
