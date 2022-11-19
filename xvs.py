@@ -2570,6 +2570,61 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: Union[bool,vs.VideoNod
     elif show.lower()=="both": #result,mask,descaled
         return core.std.ModifyFrame(rescale,[diff,rescale],calc),core.std.ModifyFrame(mask,[diff,mask],calc),descaled
 
+def MRcoref(clip:vs.VideoNode,kernel:str,w:float,h:float,bh:int,bw:int=None,mask: Union[bool,vs.VideoNode]=True,mask_dif_pix:float=2,postfilter_descaled=None,mthr:list[int]=[2,2],taps:int=3,b:float=0,c:float=0.5,multiple:float=1,maskpp=None,show:str="result",**args):
+
+    src_w,src_h=clip.width,clip.height
+    cargs=cropping_args(src_w,src_h,h,bh,bw)
+    clip32=core.fmtc.bitdepth(clip,bits=32)
+    descaled=core.descale.Descale(clip32,kernel=kernel.lower(),taps=taps,b=b,c=c,**cargs.descale_gen())
+    upscaled=resize_core(kernel.capitalize(),taps,b,c)(descaled,**cargs.resize_gen())
+    diff=core.std.Expr([clip32,upscaled],"x y - abs dup 0.015 > swap 0 ?").std.Crop(10, 10, 10, 10).std.PlaneStats()
+    def calc(n,f): 
+        fout=f[1].copy()
+        fout.props["diff"]=f[0].props["PlaneStatsAverage"]*multiple
+        return fout
+
+    if postfilter_descaled is None:
+        pass
+    elif callable(postfilter_descaled):
+        descaled=postfilter_descaled(descaled)
+    else:
+        raise ValueError("postfilter_descaled must be a function")
+
+    nsize=3 if args.get("nsize") is None else args.get("nsize")
+    nns=args.get("nns")
+    qual=2 if args.get("qual") is None else args.get("qual")
+    etype=args.get("etype")
+    pscrn=args.get("pscrn")
+    exp=args.get("exp")
+    sigmoid=args.get("sigmoid")
+
+    rescale=nnedi3_resample(descaled,nsize=nsize,nns=nns,qual=qual,etype=etype,pscrn=pscrn,exp=exp,sigmoid=sigmoid,**cargs.nnrs_gen()).fmtc.bitdepth(bits=16)
+
+    if mask is True:
+        mask=core.std.Expr([clip,upscaled.fmtc.bitdepth(bits=16,dmode=1)],"x y - abs").std.Binarize(mask_dif_pix*256)
+        if callable(maskpp):
+            mask=maskpp(mask)
+        else:
+            mask=expand(mask,cycle=mthr[0])
+            mask=inpand(mask,cycle=mthr[1])
+        rescale=core.std.MaskedMerge(rescale,clip,mask)
+    elif isinstance(mask,vs.VideoNode):
+        if mask.width!=src_w or mask.height!=src_h or mask.format.color_family!=vs.GRAY:
+            raise ValueError("mask should have same resolution as source,and should be GRAY")
+        mask=core.fmtc.bitdepth(mask,bits=16,dmode=1)
+        rescale=core.std.MaskedMerge(rescale,clip,mask)
+    else:
+        mask=core.std.BlankClip(rescale)
+
+    if show.lower()=="result":
+        return core.std.ModifyFrame(rescale,[diff,rescale],calc)
+    elif show.lower()=="mask" and mask:
+        return core.std.ModifyFrame(mask,[diff,mask],calc)
+    elif show.lower()=="descale":
+        return descaled #after postfilter_descaled
+    elif show.lower()=="both": #result,mask,descaled
+        return core.std.ModifyFrame(rescale,[diff,rescale],calc),core.std.ModifyFrame(mask,[diff,mask],calc),descaled
+
 
 
 def getsharpness(clip,show=False):
