@@ -2112,7 +2112,7 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
             tmpdiff=f[i].props["diff"]
             kernels_info.append(f"kernel {i}:\t{kernels[i]}\n{tmpdiff:.10f}")
             if tmpdiff<mindiff:
-                index,tmpdiff=i,tmpdiff
+                index,mindiff=i,tmpdiff
 
         info=info_gobal+"\n--------------------\n"+("\n--------------------\n").join(kernels_info)+"\n--------------------\ncurrent usage:\n"
         if selective_disable and mindiff>disable_thr:
