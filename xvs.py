@@ -2111,7 +2111,6 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
             tmp=line.split("\t")
             if len(tmp)>=2:
                 slist[int(tmp[0])]={'select':int(tmp[1]),'diff':[float(i) for i in tmp[2:]]}
-        print(slist)
 
     if save is not None and save!=load:
         saves=open(save,"w",encoding="utf-8")
@@ -2663,6 +2662,14 @@ def getsharpness(clip,show=False):
     dif=core.std.PlaneStats(dif)
     last=core.std.ModifyFrame(clip,[dif,clip],calc)
     return core.text.FrameProps(last,"sharpness",scale=2) if show else last
+
+def MRkernelgen(k,w=None,h=None,b=None,c=None,taps=None,mask=None,mask_dif_pix=None,mthr=None,pp=None,multiple=None,maskpp=None,fmode=None):
+    l=locals()
+    tmp={}
+    for i in l.keys():
+        if l[i] is not None:
+            tmp[i]=l[i]
+    return tmp
 
 
 class cropping_args:
