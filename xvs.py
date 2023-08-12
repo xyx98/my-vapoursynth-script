@@ -2057,7 +2057,7 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,**args):
+def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,save=None,load=None,**args):
     clip=core.fmtc.bitdepth(clip,bits=16)
     luma=getY(clip)
     src_h,src_w=clip.height,clip.width
@@ -2102,28 +2102,71 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
             kbw=i.get("bw")
             rescales.append(MRcoref(luma,kernel=k,w=kw,h=kh,bh=kbh,bw=kbw,mask=kmask,mask_dif_pix=kmdp,postfilter_descaled=kpp,mthr=kmthr,taps=ktaps,b=kb,c=kc,multiple=multiple,maskpp=kmaskpp,**args))
 
+    if load is not None:
+        with open(load,"r",encoding="utf-8") as file:
+            plist=file.read().split('\n')
+
+        slist={}
+        for line in plist[1:]:
+            tmp=line.split("\t")
+            if len(tmp)>=2:
+                slist[int(tmp[0])]={'select':int(tmp[1]),'diff':[float(i) for i in tmp[2:]]}
+        print(slist)
+
+    if save is not None and save!=load:
+        saves=open(save,"w",encoding="utf-8")
+        saves.write("n\tselect\t"+"\t".join([str(i) for i in range(len(kernels))])+"\n")
 
     def selector(n,f,src,clips):
         kernels_info=[]
+        diffs=[]
         if len(f)==1:
             f=[f]
         index,mindiff=0,f[0].props["diff"]
         for i in range(total):
             tmpdiff=f[i].props["diff"]
+            diffs.append(tmpdiff)
             kernels_info.append(f"kernel {i}:\t{kernels[i]}\n{tmpdiff:.10f}")
             if tmpdiff<mindiff:
                 index,mindiff=i,tmpdiff
 
         info=info_gobal+"\n--------------------\n"+("\n--------------------\n").join(kernels_info)+"\n--------------------\ncurrent usage:\n"
+        info_short="\t".join([str(i) for i in diffs])
         if selective_disable and mindiff>disable_thr:
+            usesrc=True
             last=src
             info+="source"
+            info_short=f"{n}\t-1\t"+info_short+"\n"
         else:
             last=clips[index]
             info+=kernels_info[index]
+            info_short=f"{n}\t{index}\t"+info_short+"\n"
+        
+        if load is not None:
+            info+="--------------------\noverwrite info:\n"
+            if slist.get(n) is not None:
+                newindex=slist[n]["select"]
+                if newindex==-1:
+                    if usesrc:
+                        info+="same as current"
+                    else:
+                        last=src
+                        info+="source"
+                else:
+                    if newindex==index:
+                        info+="same as current"
+                    else:
+                        last=clips[newindex]
+                        info+=kernels_info[newindex]
+            else:
+                info+="skip"
+
         if showinfo:
             last=core.text.Text(last,info.replace("\t","    "))
+        if save is not None:
+            saves.write(info_short)
         return last
+        saves.close()
 
     last=core.std.FrameEval(luma,functools.partial(selector,src=luma,clips=rescales),prop_src=rescales)
     if clip.format.color_family==vs.GRAY:
