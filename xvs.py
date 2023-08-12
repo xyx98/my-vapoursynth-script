@@ -2057,7 +2057,7 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,save=None,load=None,**args):
+def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,save=None,load=None,kindex=False,**args):
     clip=core.fmtc.bitdepth(clip,bits=16)
     luma=getY(clip)
     src_h,src_w=clip.height,clip.width
@@ -2136,6 +2136,7 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
             last=src
             info+="source"
             info_short=f"{n}\t-1\t"+info_short+"\n"
+            index=-1
         else:
             last=clips[index]
             info+=kernels_info[index]
@@ -2158,12 +2159,17 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
                         last=clips[newindex]
                         info+=kernels_info[newindex]
             else:
+                newindex=-2
                 info+="skip"
 
         if showinfo:
             last=core.text.Text(last,info.replace("\t","    "))
         if save is not None:
             saves.write(info_short)
+        if kindex:
+            last=core.std.SetFrameProp(last,'kindex',intval=index)
+            if load:
+                last=core.std.SetFrameProp(last,'nkindex',intval=newindex)
         return last
         saves.close()
 
