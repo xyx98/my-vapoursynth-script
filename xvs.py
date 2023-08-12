@@ -571,7 +571,7 @@ def NonlinUSM(src,z=6.0,pow=1.6,str=1.0,rad=9,ldmp=0.001):
     height = src.height
     isGray = src.format.color_family == vs.GRAY
     clip = src if isGray else getplane(src,0)
-    g=core.resize.Bicubic(clip,haf.m4(width/rad),haf.m4(height/rad),filter_param_a=1/3, filter_param_b=1/3).resize.Bicubic(width,height,filter_param_a=1, filter_param_b=0)
+    g=core.resize.Bicubic(clip,m4(width/rad),m4(height/rad),filter_param_a=1/3, filter_param_b=1/3).resize.Bicubic(width,height,filter_param_a=1, filter_param_b=0)
     expr="x x y - abs {bs} / {z} / 1 {pow} / pow {z} * {str} * x y - {bs} / dup * * x y - {bs} / dup * {ldmp} + / x y - * {bs} / x y - abs {bs} / 0.001 + / {bs} * +".format(bs=2**(bit-8),z=z,pow=pow,str=str,ldmp=ldmp)
     Ylast = core.std.Expr([clip,g], [expr])
     last = Ylast if isGray else core.std.ShufflePlanes([Ylast,src],[0,1,2], colorfamily=vs.YUV)
@@ -1247,13 +1247,13 @@ def XSAA(src,nsize=None,nns=2,qual=None,aamode=-1,maskmode=1,opencl=False,device
 
     if maskmode==1:
         mask=clip.tcanny.TCanny(sigma=1.5, t_h=20.0, t_l=8.0)
-        mask=haf.mt_expand_multi(mask, 'losange', planes=[0], sw=1, sh=1)
+        mask=mt_expand_multi(mask, 'losange', planes=[0], sw=1, sh=1)
         if preaa==1:
             clip=Yclip
         last=core.std.MaskedMerge(clip, last, mask)
     elif maskmode==2:
         mask=last.tcanny.TCanny(sigma=1.5, t_h=20.0, t_l=8.0)
-        mask=haf.mt_expand_multi(mask, 'losange', planes=[0], sw=1, sh=1)
+        mask=mt_expand_multi(mask, 'losange', planes=[0], sw=1, sh=1)
         if preaa==1:
             clip=Yclip
         last=core.std.MaskedMerge(clip, last, mask)
@@ -1621,7 +1621,7 @@ def mwaa(clip, aa_y=True, aa_c=False, cs_h=0, cs_v=0, aa_cmask=True, kernel_y=2,
 
     ## mask
     aamask = clip.tcanny.TCanny(sigma=1.5, t_h=20.0, t_l=8.0, planes=[0])
-    aamask = haf.mt_expand_multi(aamask, 'losange', planes=[0], sw=1, sh=1)
+    aamask = mt_expand_multi(aamask, 'losange', planes=[0], sw=1, sh=1)
 
     ## merge
     if aa_y:
@@ -1779,22 +1779,22 @@ def mwdbmask(clip: vs.VideoNode, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv44
     if chroma:
         emaskC = mvf.Max(mvf.GetPlane(emask, 1), mvf.GetPlane(emask, 2))
         if yuv420:
-            emaskC = haf.mt_inpand_multi(haf.mt_expand_multi(emaskC, 'losange', sw=3, sh=3), 'rectangle', sw=3, sh=3)
+            emaskC = mt_inpand_multi(mt_expand_multi(emaskC, 'losange', sw=3, sh=3), 'rectangle', sw=3, sh=3)
             emaskC = emaskC.fmtc.resample(sw, sh, 0.25 - cs_h / 2, 0 - cs_v / 2, kernel='bilinear', fulls=True).fmtc.bitdepth(bits=bits)
         else:
             emaskY = mvf.Max(emaskY, emaskC)
-    emaskY = haf.mt_inpand_multi(haf.mt_expand_multi(emaskY, 'losange', sw=5, sh=5), 'rectangle', sw=2, sh=2)
+    emaskY = mt_inpand_multi(mt_expand_multi(emaskY, 'losange', sw=5, sh=5), 'rectangle', sw=2, sh=2)
     if chroma and yuv420:
         dbmask = mvf.Max(emaskY, emaskC)
     else:
         dbmask = emaskY
     ## convert to final mask, all the planes of which are the same
     if yuv444:
-        dbmask = haf.mt_inflate_multi(dbmask, radius=2)
+        dbmask = mt_inflate_multi(dbmask, radius=2)
         dbmaskC = dbmask
     else:
         dbmaskC = dbmask.fmtc.resample(sw // 2, sh // 2, -0.5, 0, kernel='bilinear').fmtc.bitdepth(bits=bits)
-        dbmask = haf.mt_inflate_multi(dbmask, radius=2)
+        dbmask = mt_inflate_multi(dbmask, radius=2)
     dbmask = core.std.ShufflePlanes([dbmask, dbmaskC, dbmaskC], [0,0,0], vs.YUV)
     return dbmask
 
@@ -2670,6 +2670,88 @@ def MRkernelgen(k,w=None,h=None,b=None,c=None,taps=None,mask=None,mask_dif_pix=N
         if l[i] is not None:
             tmp[i]=l[i]
     return tmp
+
+#copy from havsfunc
+#=============================================================================
+#   mt_expand_multi
+#   mt_inpand_multi
+#
+#   Calls mt_expand or mt_inpand multiple times in order to grow or shrink
+#   the mask from the desired width and height.
+#
+#   Parameters:
+#   - sw   : Growing/shrinking shape width. 0 is allowed. Default: 1
+#   - sh   : Growing/shrinking shape height. 0 is allowed. Default: 1
+#   - mode : "rectangle" (default), "ellipse" or "losange". Replaces the
+#       mt_xxpand mode. Ellipses are actually combinations of
+#       rectangles and losanges and look more like octogons.
+#       Losanges are truncated (not scaled) when sw and sh are not
+#       equal.
+#   Other parameters are the same as mt_xxpand.
+#=============================================================================
+def mt_expand_multi(src, mode='rectangle', planes=None, sw=1, sh=1):
+    if not isinstance(src, vs.VideoNode):
+        raise vs.Error('mt_expand_multi: this is not a clip')
+
+    if sw > 0 and sh > 0:
+        mode_m = [0, 1, 0, 1, 1, 0, 1, 0] if mode == 'losange' or (mode == 'ellipse' and (sw % 3) != 1) else [1, 1, 1, 1, 1, 1, 1, 1]
+    elif sw > 0:
+        mode_m = [0, 0, 0, 1, 1, 0, 0, 0]
+    elif sh > 0:
+        mode_m = [0, 1, 0, 0, 0, 0, 1, 0]
+    else:
+        mode_m = None
+
+    if mode_m is not None:
+        src = mt_expand_multi(src.std.Maximum(planes=planes, coordinates=mode_m), mode=mode, planes=planes, sw=sw - 1, sh=sh - 1)
+    return src
+
+
+def mt_inpand_multi(src, mode='rectangle', planes=None, sw=1, sh=1):
+    if not isinstance(src, vs.VideoNode):
+        raise vs.Error('mt_inpand_multi: this is not a clip')
+
+    if sw > 0 and sh > 0:
+        mode_m = [0, 1, 0, 1, 1, 0, 1, 0] if mode == 'losange' or (mode == 'ellipse' and (sw % 3) != 1) else [1, 1, 1, 1, 1, 1, 1, 1]
+    elif sw > 0:
+        mode_m = [0, 0, 0, 1, 1, 0, 0, 0]
+    elif sh > 0:
+        mode_m = [0, 1, 0, 0, 0, 0, 1, 0]
+    else:
+        mode_m = None
+
+    if mode_m is not None:
+        src = mt_inpand_multi(src.std.Minimum(planes=planes, coordinates=mode_m), mode=mode, planes=planes, sw=sw - 1, sh=sh - 1)
+    return src
+
+
+def mt_inflate_multi(src, planes=None, radius=1):
+    if not isinstance(src, vs.VideoNode):
+        raise vs.Error('mt_inflate_multi: this is not a clip')
+
+    for i in range(radius):
+        src = core.std.Inflate(src, planes=planes)
+    return src
+
+
+def mt_deflate_multi(src, planes=None, radius=1):
+    if not isinstance(src, vs.VideoNode):
+        raise vs.Error('mt_deflate_multi: this is not a clip')
+
+    for i in range(radius):
+        src = core.std.Deflate(src, planes=planes)
+    return src
+
+def cround(x):
+    return math.floor(x + 0.5) if x > 0 else math.ceil(x - 0.5)
+
+
+def m4(x):
+    return 16 if x < 16 else cround(x / 4) * 4
+
+
+def scale(value, peak):
+    return cround(value * peak / 255) if peak != 1 else value / 255
 
 
 class cropping_args:
