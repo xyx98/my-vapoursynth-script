@@ -1187,6 +1187,89 @@ def props2csv(clip:vs.VideoNode,props:list,titles:list,output="info.csv",sep="\t
         file.close()
     return core.std.FrameEval(clip, functools.partial(tocsv, clip=clip),prop_src=clip)
 
+def csv2props(clip:vs.VideoNode,file:str,sep:str="\t",props:list[list]=None,rawfilter=None,strict=False,charset="utf-8"):
+    """
+    csv file must contain a column use "n" as title to log frame number,all values should be int >=0.
+    props:
+        should be a list contain a list with "title of values in csv","prop name you want set","fuction you want use to process raw value" ,"default when value not in csv" in order.
+        If leave props unset,use all titles in csv.
+        If leave "prop name you want set" None,it will same as "title of values in csv"
+        If leave "fuction you want use to process raw value" None,will use raw value as an string.
+        If leave "default when value not in csv" None,will use a empty string as default value.
+
+        Notice:Default value only for frame number not in csv,will not affect line with missing value and sep.
+    rawfilter:
+        overwrite fuction use to process raw value when "fuction you want use to process raw value" unset.
+    strict:
+        If True, will throw an exception instead of using default value when frame number not in csv. And also force "n column" only contain frame number in clip strictly. 
+        If False,it also ignore same frame number in csv and use the last one.(maybe change in future)
+    """
+    rawfilter=rawfilter if (rawfilter is not None and callable(rawfilter)) else lambda x:x
+    with open(file,encoding=charset) as file:
+        lines=[line.split(sep) for line in file.read().split("\n") if len(line.split(sep))>1]
+    
+    if "n" not in lines[0]:
+        raise ValueError("""csv file must contain a column use "n" as title to log frame number,all values should be int >=0.""")
+    
+    if len(set(lines[0])) != len(lines[0]):
+        raise ValueError("csv should not have columns with same title")
+
+    titles=lines[0][:]
+    titles.remove("n")
+    nindex=lines[0].index("n")
+
+    if strict:
+        nlist=sorted([int(line[nindex]) for line in lines[1:]])
+        if nlist!=list(range(len(clip))):
+            raise ValueError(""" "n column" should only contain frame number in clip strictly. """)
+    datas={}
+    for line in lines[1:]:
+        if len(line)<len(lines[0]):
+            raise ValueError("missing value in csv")
+
+        tline=line[:]
+        del tline[nindex]
+        datas[int(line[nindex])]=dict(zip(titles,tline))
+
+    if props is None:
+        props=[[titles[i],titles[i],rawfilter,None] for i in range(len(titles))]
+    else:
+        tmp=[]
+        for prop in props:
+            tp=[
+                None,
+                prop+[None,None,None],
+                prop+[None,None],
+                prop+[None],
+                prop
+            ][len(prop)]
+            if tp is None or tp[0] is None or tp[0] not in titles:
+                continue
+            if tp[1] is None:
+                tp[1]=tp[0]
+            if tp[2] is None:
+                tp[2]=rawfilter
+            if tp[3] is None:
+                tp[3]=''
+            tmp.append(tp)
+        props=tmp
+
+    pdatas={}
+    for i in range(len(clip)):
+        data=datas.get(i)
+        if data is None:
+            pdatas[i]=dict(zip([p[1] for p in props],[p[3] for p in props]))
+        else:
+            pdatas[i]=dict(zip([p[1] for p in props],[p[2](data[p[0]]) for p in props]))
+
+    def attach(n,f): 
+        fout=f.copy()
+        for k,v in pdatas[n].items():
+            fout.props[k]=v
+        return fout
+
+    last=core.std.ModifyFrame(clip,clip,attach)
+    return last
 
 def XSAA(src,nsize=None,nns=2,qual=None,aamode=-1,maskmode=1,opencl=False,device=-1,linedarken=False,preaa=0):
     """
