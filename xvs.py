@@ -1926,7 +1926,10 @@ def mwenhance(diffClip, chroma=False, Strength=2.0, Szrp8=8, Spwr=4, SdmpLo=4, S
         expr=' x {neutral} = x {enhanced} ? '.format(neutral=neutral,enhanced=enhanced)
 
         #apply expr
-        diffClip=diffClip.std.Expr([expr,expr if chroma else ''])
+        if diffClip.format.num_planes==1:
+            diffClip=diffClip.std.Expr([expr])
+        else:
+            diffClip=diffClip.std.Expr([expr,expr if chroma else ''])
 
     else:
         # function to generate sharpening LUT
