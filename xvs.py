@@ -11,8 +11,6 @@ nnedi3_resample=nnrs.nnedi3_resample
 if hasattr(core,"znedi3") and "mode" in nnrs.nnedi3_resample.__code__.co_varnames:
         nnedi3_resample=functools.partial(nnrs.nnedi3_resample,mode="znedi3")
 
-
-
 #main function
 
 def STPresso(clip=None, limit=3, bias=24, RGmode=4, tthr=12, tlimit=3, tbias=49, back=1):
@@ -2321,12 +2319,12 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
             refine=1,dmode=0,
             v2=False):
     """
-    warp function for bm3dcpu,bm3dcuda,and bm3dcuda_rtc,similar to mvs.bm3d but only main function(without colorspace tranform)
-    due to difference  between bm3d and bm3d{cpu,cuda,cuda_rtc},result will not match mvf.bm3d
+    warp function for bm3dcpu,bm3dcuda,bm3dcuda_rtc,and bm3dhip,similar to mvs.bm3d but only main function(without colorspace tranform)
+    due to difference  between bm3d and bm3d{cpu,cuda,cuda_rtc,hip},result will not match mvf.bm3d
     -------------------------------------------------------------------------
     preset,preset2:set preset for basic estimate and final estimate.Supported value:fast,lc,np,high
     v2:True means use bm3dv2,for vbm3d,it should slightly faster
-    For more info about other parameters,read bm3d{cpu,cuda,cuda_rtc}'s doc.
+    For more info about other parameters,read bm3d{cpu,cuda,cuda_rtc,hip}'s doc.
     """
     bits=clip.format.bits_per_sample
     clip=core.fmtc.bitdepth(clip,bits=32)
@@ -2601,25 +2599,29 @@ def preview(*args):
         return core.std.Interleave(plist)
 
 def bm3d_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=0,ps_num=2,ps_range=4,chroma=False,fast=True,extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT"):
-    if mode not in ["cpu","cuda","cuda_rtc"]:
-        raise ValueError("mode must be cpu,or cuda,or cuda_rtc")
+    if mode not in ["cpu","cuda","cuda_rtc","hip"]:
+        raise ValueError("mode must be cpu,or cuda,or cuda_rtc,or hip!")
     elif mode=="cpu":
         return core.bm3dcpu.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma)
     elif mode=="cuda":
         return core.bm3dcuda.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id)
-    else:
+    elif mode=="cuda_rtc":
         return core.bm3dcuda_rtc.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
-    
+    else:
+        return core.bm3dhip.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id)
 
 def bm3dv2_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=0,ps_num=2,ps_range=4,chroma=False,fast=True,extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT"):
-    if mode not in ["cpu","cuda","cuda_rtc"]:
-        raise ValueError("mode must be cpu,or cuda,or cuda_rtc")
+    if mode not in ["cpu","cuda","cuda_rtc","hip"]:
+        raise ValueError("mode must be cpu,or cuda,or cuda_rtc,or hip!")
     elif mode=="cpu":
         return core.bm3dcpu.BM3Dv2(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma)
     elif mode=="cuda":
         return core.bm3dcuda.BM3Dv2(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id)
-    else:
+    elif mode=="cuda_rtc":
         return core.bm3dcuda_rtc.BM3Dv2(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id,bm_error_s=bm_error_s,transform_2d_s=transform_2d_s,transform_1d_s=transform_1d_s)
+    else:
+        return core.bm3dhip.BM3Dv2(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id)
+
 
 def resize_core(kernel:str,taps: int=3,b: float=0,c: float=0):
     kernel=kernel.capitalize()
