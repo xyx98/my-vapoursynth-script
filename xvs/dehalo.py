@@ -1,7 +1,11 @@
 from .utils import *
 
 #from muvsfunc
-def abcxyz(clp: vs.VideoNode, rad: float = 3.0, ss: float = 1.5) -> vs.VideoNode:
+def abcxyz(
+    clp: vs.VideoNode, 
+    rad: float = 3.0, 
+    ss: float = 1.5
+) -> vs.VideoNode:
     """Avisynth's abcxyz()
 
     Reduces halo artifacts that can occur when sharpening.
@@ -53,7 +57,14 @@ def abcxyz(clp: vs.VideoNode, rad: float = 3.0, ss: float = 1.5) -> vs.VideoNode
     return z1
 
 #modified from old havsfunc
-def EdgeCleaner(c: vs.VideoNode, strength: int = 10, rep: bool = True, rmode: int = 17, smode: int = 0, hot: bool = False) -> vs.VideoNode:
+def EdgeCleaner(
+    c: vs.VideoNode, 
+    strength: int = 10, 
+    rep: bool = True, 
+    rmode: int = 17, 
+    smode: int = 0, 
+    hot: bool = False,
+) -> vs.VideoNode:
     '''
     EdgeCleaner v1.04
     A simple edge cleaning and weak dehaloing function.
@@ -119,7 +130,12 @@ def EdgeCleaner(c: vs.VideoNode, strength: int = 10, rep: bool = True, rmode: in
     return final
 
 @deprecated("No maintenance.")
-def LazyDering(src,depth=32,diff=8,thr=32):
+def LazyDering(
+    src: vs.VideoNode,
+    depth: int = 32,
+    diff: int = 8,
+    thr: int = 32,
+) -> vs.VideoNode:
     """
     LazyDering
     -----------------------------
@@ -137,7 +153,14 @@ def LazyDering(src,depth=32,diff=8,thr=32):
     return core.std.ShufflePlanes([merge,src],[0,1,2], colorfamily=vs.YUV)
 
 @deprecated("No maintenance.")
-def SADering(src,ring_r=2,warp_arg={},warpclip=None,edge_r=2,show_mode=0):
+def SADering(
+    src:vs.VideoNode,
+    ring_r: int = 2,
+    warp_arg: dict = {},
+    warpclip: vs.VideoNode | None = None,
+    edge_r: int = 2,
+    show_mode: int = 0,
+) -> vs.VideoNode:
     """
     Simple Awarpsharp2 Dering
     ---------------------------------------

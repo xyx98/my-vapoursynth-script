@@ -2,7 +2,10 @@ from .utils import *
 
 #from old havsfunc.
 @deprecated("Use VapourSynth-EdgeMasks instead.")
-def AvsPrewitt(clip, planes=None):
+def AvsPrewitt(
+    clip: vs.VideoNode, 
+    planes: PlanesType = None,
+) -> vs.VideoNode:
     if not isinstance(clip, vs.VideoNode):
         raise vs.Error('AvsPrewitt: this is not a clip')
 
@@ -19,7 +22,11 @@ def AvsPrewitt(clip, planes=None):
         ],
         expr=['x y max z max a max' if i in planes else '' for i in range(clip.format.num_planes)])
 
-def creditmask(clip,nclip,mode=0):
+def creditmask(
+    clip: vs.VideoNode,
+    nclip: vs.VideoNode,
+    mode: int = 0,
+) -> vs.VideoNode:
     """
     use non-credit clip to create mask for credit area
     255(8bit) means credit
@@ -58,7 +65,13 @@ def creditmask(clip,nclip,mode=0):
             raise ValueError("mode must be 0 or 1")
         return mask.resize.Bicubic(format=fid)
     
-def mwlmask(clip, l1=80, h1=96, h2=None, l2=None):
+def mwlmask(
+    clip: vs.VideoNode, 
+    l1: int = 80, 
+    h1: int = 96, 
+    h2: int | None = None, 
+    l2: int | None = None,
+) -> vs.VideoNode:
     """
     luma mask
     Steal from other one's script. Most likely written by mawen1250.
@@ -74,18 +87,32 @@ def mwlmask(clip, l1=80, h1=96, h2=None, l2=None):
     else: l2 = l2 << (sbitPS - 8)
     
     if h2 >= white:
-        expr = '{white}'.format(white=white)
+        expr = f'{white}'
     else:
-        expr = 'x {h2} <= {white} x {l2} < x {l2} - {slope2} * {black} ? ?'.format(black=black, white=white, h2=h2, l2=l2, slope2=white / (h2 - l2))
-    expr = 'x {l1} <= {black} x {h1} < x {l1} - {slope1} * ' + expr + ' ? ?'
-    expr = expr.format(black=black, l1=l1, h1=h1, slope1=white / (h1 - l1))
+        slope2=white / (h2 - l2)
+        expr = f'x {h2} <= {white} x {l2} < x {l2} - {slope2} * {black} ? ?'
+    slope1=white / (h1 - l1)
+    expr = f'x {l1} <= {black} x {h1} < x {l1} - {slope1} * ' + expr + ' ? ?'
     
     clip = getplane(clip, 0)
     clip = clip.rgvs.RemoveGrain(4)
     clip = Expr(expr)
     return clip
 
-def mwdbmask(clip: vs.VideoNode, chroma=True, sigma=2.5, t_h=1.0, t_l=0.5, yuv444=None, cs_h=0, cs_v=0, lmask=None, sigma2=2.5, t_h2=3.0, t_l2=1.5):
+def mwdbmask(
+    clip: vs.VideoNode, 
+    chroma: bool = True, 
+    sigma: float = 2.5, 
+    t_h: float = 1.0, 
+    t_l: float = 0.5, 
+    yuv444: bool | None = None, 
+    cs_h: int = 0, 
+    cs_v: int = 0, 
+    lmask: vs.VideoNode | None = None, 
+    sigma2: float = 2.5, 
+    t_h2: float = 3.0, 
+    t_l2: float = 1.5,
+) -> vs.VideoNode:
     """
     deband mask
     Steal from other one's script. Most likely written by mawen1250.

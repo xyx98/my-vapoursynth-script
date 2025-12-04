@@ -4,7 +4,12 @@ import os
 import re
 
 
-def splicev1(clip=[],num=[],den=[],tc_out="tc v1.txt"):
+def splicev1(
+    clip: Sequence[vs.VideoNode],
+    num: Sequence[int],
+    den: Sequence[int],
+    tc_out: str = "tc v1.txt",
+) -> vs.VideoNode:
     """
     splice clips with different fps and output timecodes v1
     """
@@ -43,10 +48,32 @@ def splicev1(clip=[],num=[],den=[],tc_out="tc v1.txt"):
     last=core.std.AssumeFPS(last,fpsnum=num[0],fpsden=den[0])
     return last
 
-def mvfrc(input,it=140,scp=15,num=60000,den=1001,preset='fast',
-        pel=2,block=True,flow_mask=None,block_mode=None,
-        blksize = 8,blksizev=8,search=None,truemotion=True,searchparam=2,overlap=0,overlapv=None,
-        dct=0,blend=True,badSAD=10000,badrange=24,divide=0,ml=100,Mblur=15):
+def mvfrc(
+    input: vs.VideoNode,
+    it: int = 140,
+    scp: int = 15,
+    num: int = 60000,
+    den: int = 1001,
+    preset: str = 'fast',
+    pel: int = 2,
+    block: bool = True,
+    flow_mask: int | None = None,
+    block_mode: int | None = None,
+    blksize: int = 8,
+    blksizev: int = 8,
+    search: int | None = None,
+    truemotion: bool | None = True,
+    searchparam: int = 2,
+    overlap: int = 0,
+    overlapv: int | None = None,
+    dct: int = 0,
+    blend: bool = True,
+    badSAD: int = 10000,
+    badrange: int = 24,
+    divide: int = 0,
+    ml: float = 100,
+    Mblur: int = 15,
+) -> vs.VideoNode:
     """
     change fps by mvtools with motion interpolation
     it = thscd1    ;    scp=thscd2/255*100
@@ -89,7 +116,8 @@ def mvfrc(input,it=140,scp=15,num=60000,den=1001,preset='fast',
         'thscd2':int(scp*255/100),
         'blend':blend,
         'num':num,
-        'den':den
+        'den':den,
+        'ml' : ml,
         }
     ############
     sup = core.mv.Super(input, pel=pel,sharp=2, rfilter=4)
@@ -104,8 +132,15 @@ def mvfrc(input,it=140,scp=15,num=60000,den=1001,preset='fast',
     return clip
 
 @deprecated("No maintenance.")
-def textsub(input,file,charset=None,fps=None,vfr=None,
-              mod=False,Matrix=None):
+def textsub(
+    input: vs.VideoNode,
+    file: str,
+    charset: str | None = None,
+    fps: float | None = None,
+    vfr: str | None = None,
+    mod: bool = False,
+    Matrix: str | None = None,
+) -> vs.VideoNode:
     """
     ---------------------------
     textsub
@@ -186,7 +221,13 @@ def textsub(input,file,charset=None,fps=None,vfr=None,
     return last
 
 @deprecated("No maintenance.")
-def vfrtocfr(clip=None,tc=None,num=None,den=1,blend=False):
+def vfrtocfr(
+    clip: vs.VideoNode,
+    tc: str,
+    num: int,
+    den: int = 1,
+    blend: bool = False,
+) -> vs.VideoNode:
     """
     vfrtocfr
     --------------------------------
@@ -224,7 +265,14 @@ def vfrtocfr(clip=None,tc=None,num=None,den=1,blend=False):
     return core.std.Cache(last, make_linear=True)
 
 @deprecated("No maintenance.")
-def Overlaymod(clipa, clipb, x=0, y=0, alpha=None,aa=False):
+def Overlaymod(
+    clipa: vs.VideoNode, 
+    clipb: vs.VideoNode, 
+    x: int = 0, 
+    y: int = 0, 
+    alpha: vs.VideoNode | None = None,
+    aa: bool = False,
+) -> vs.VideoNode:
     """
     Overlaymod
     -------------------------
@@ -244,7 +292,7 @@ def Overlaymod(clipa, clipb, x=0, y=0, alpha=None,aa=False):
     if clipb.format.id != clipa.format.id:
         clipb = core.resize.Point(clipb, format=clipa.format.id)
     mask = core.std.BlankClip(clipb, color=[(1 << clipb.format.bits_per_sample) - 1] * clipb.format.num_planes)
-    if not isinstance(alpha, vs.VideoNode):
+    if (alpha is not None) and (not isinstance(alpha, vs.VideoNode)):
         raise TypeError("Overlaymod: 'alpha' is not a clip")
     if mask.width != clipb.width or mask.height != clipb.height:
         raise TypeError("Overlaymod: 'alpha' must be the same dimension as 'clipb'")
@@ -284,8 +332,19 @@ def Overlaymod(clipa, clipb, x=0, y=0, alpha=None,aa=False):
     return last
 
 @deprecated("No maintenance.")
-def InterFrame(Input, Preset='Medium', Tuning='Film', NewNum=None, NewDen=1, GPU=True, gpuid=0,InputType='2D', OverrideAlgo=None, OverrideArea=None,
-               FrameDouble=False):
+def InterFrame(
+    Input: vs.VideoNode, 
+    Preset: str = 'Medium', 
+    Tuning: str = 'Film', 
+    NewNum: int | None = None, 
+    NewDen: int = 1, 
+    GPU: bool = True, 
+    gpuid: int = 0,
+    InputType: str = '2D', 
+    OverrideAlgo: dict | None = None, 
+    OverrideArea: dict | None = None,
+    FrameDouble: bool = False,
+) -> vs.VideoNode:
     """
     adjusted InterFrame from havsfunc,support 10bit with new svp
     """
@@ -423,7 +482,11 @@ def InterFrame(Input, Preset='Medium', Tuning='Film', NewNum=None, NewDen=1, GPU
         return InterFrameProcess(Input,oInput)
 
 @deprecated("Do not use!")
-def xTonemap(clip,nominal_luminance=400,exposure=4.5):
+def xTonemap(
+    clip: vs.VideoNode,
+    nominal_luminance: int = 400,
+    exposure:float = 4.5,
+) -> vs.VideoNode:
     """
     The way I convert hdr to sdr when I rip 'Kimi No Na Wa'(UHDBD HK ver.).
     I'm not sure It suit for other UHDBD
@@ -436,11 +499,15 @@ def xTonemap(clip,nominal_luminance=400,exposure=4.5):
     clip=core.resize.Spline36(clip=clip, format=vs.RGBS,range_in_s="limited", matrix_in_s="2020ncl", primaries_in_s="2020", primaries_s="2020", transfer_in_s="st2084", transfer_s="linear",dither_type="none", nominal_luminance=nominal_luminance)
     clip=core.tonemap.Mobius(clip,exposure=exposure)
     clip=core.resize.Spline36(clip, format=fid,matrix_s="709", primaries_in_s="2020", primaries_s="709", transfer_in_s="linear", transfer_s="709",dither_type="none")
-    clip=core.std.Expr(clip,["x 4096 - 219 * 235 / 4096 +",""])
+    clip=Expr(clip,["x 4096 - 219 * 235 / 4096 +",""])
     return clip
 
 @deprecated("No maintenance.")
-def readmpls(path:str,sfilter='ffms2',cache=None):
+def readmpls(
+    path: str,
+    sfilter: str = 'ffms2',
+    cache: int | None = None,
+) -> vs.VideoNode:
     mpls = core.mpls.Read(path)
     if sfilter in ["ffms2","ffms","ff","f","ffvideosource"]:
         if cache is None or cache==0:
@@ -465,11 +532,18 @@ def readmpls(path:str,sfilter='ffms2',cache=None):
     return core.std.Splice(clips)
 
 #copy from muvsfunc
-def LDMerge(flt_h: vs.VideoNode, flt_v: vs.VideoNode, src: vs.VideoNode, mrad: int = 0,
-            show: bool = False, planes: PlanesType = None,
-            convknl: int = 1, conv_div: Optional[int] = None, calc_mode: int = 0,
-            power: float = 1.0
-            ) -> vs.VideoNode:
+def LDMerge(
+    flt_h: vs.VideoNode, 
+    flt_v: vs.VideoNode, 
+    src: vs.VideoNode, 
+    mrad: int = 0,
+    show: bool = False, 
+    planes: PlanesType = None,
+    convknl: int = 1, 
+    conv_div: int | None = None, 
+    calc_mode: int = 0,
+    power: float = 1.0,
+) -> vs.VideoNode:
     """Merges two filtered clips based on the gradient direction map from a source clip.
 
     Args:
@@ -562,7 +636,7 @@ def LDMerge(flt_h: vs.VideoNode, flt_v: vs.VideoNode, src: vs.VideoNode, mrad: i
         ldexpr = '{peak} 1 x 0.0001 + y 0.0001 + / {power} pow + /'.format(peak=(1 << bits) - 1, power=power)
     else:
         ldexpr = 'y 0.0001 + x 0.0001 + dup * y 0.0001 + dup * + sqrt / {peak} *'.format(peak=(1 << bits) - 1)
-    ldmap = core.std.Expr([hmap, vmap], [(ldexpr if i in planes else '') for i in range(src.format.num_planes)])
+    ldmap = Expr([hmap, vmap], [(ldexpr if i in planes else '') for i in range(src.format.num_planes)])
 
     if show == 0:
         return core.std.MaskedMerge(flt_h, flt_v, ldmap, planes=planes)
@@ -576,7 +650,13 @@ def LDMerge(flt_h: vs.VideoNode, flt_v: vs.VideoNode, src: vs.VideoNode, mrad: i
         raise ValueError
 
 #simplified from mvsfunc.Depth,only lowbitdepth part left.
-def lowbitdepth_sim(clip:vs.VideoNode,depth:int,dither:int=1,fulls:bool=None,fulld:bool=None):
+def lowbitdepth_sim(
+    clip: vs.VideoNode,
+    depth: int,
+    dither: int = 1,
+    fulls: bool | None = None,
+    fulld: bool | None = None,
+) -> vs.VideoNode:
     if not 0 < depth < 8 : 
         raise vs.Error("lowbitdepth_sim: depth should be positive integer and less than 8.")
 

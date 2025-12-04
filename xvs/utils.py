@@ -12,41 +12,47 @@ PlanesType = Optional[Union[int, Sequence[int]]]
 VSFuncType = Union[vs.Func, Callable[..., vs.VideoNode]]
 
 #converting the values in one depth to another
-def scale(i,depth_out=16,depth_in=8):
+def scale(i: int,depth_out: int = 16,depth_in: int = 8) -> (int | float):
     return i*2**(depth_out-depth_in)
 
 #getplane in YUV
-def getplane(clip,i):
+def getplane(clip: vs.VideoNode,i: int) -> vs.VideoNode:
     return clip.std.ShufflePlanes(i, colorfamily=vs.GRAY)
 
-def getY(clip):
+def getY(clip: vs.VideoNode) -> vs.VideoNode:
     return clip.std.ShufflePlanes(0, colorfamily=vs.GRAY)
 
-def getU(clip):
+def getU(clip: vs.VideoNode) -> vs.VideoNode:
     return clip.std.ShufflePlanes(1, colorfamily=vs.GRAY)
 
-def getV(clip):
+def getV(clip: vs.VideoNode) -> vs.VideoNode:
     return clip.std.ShufflePlanes(2, colorfamily=vs.GRAY)
 
 #extract all planes
-def extractPlanes(clip):
+def extractPlanes(clip: vs.VideoNode) -> tuple[vs.VideoNode]:
     return tuple(clip.std.ShufflePlanes(x, colorfamily=vs.GRAY) for x in range(clip.format.num_planes))
 
 #show plane in YUV(interger only)
-def showY(clip):
+def showY(clip: vs.VideoNode) -> vs.VideoNode:
     return Expr(clip,["",str(scale(128,clip.format.bits_per_sample))])
 
-def showU(clip):
+def showU(clip: vs.VideoNode) -> vs.VideoNode:
     return Expr(clip,["0","",str(scale(128,clip.format.bits_per_sample))])
 
-def showV(clip):
+def showV(clip: vs.VideoNode) -> vs.VideoNode:
     return Expr(clip,["0",str(scale(128,clip.format.bits_per_sample)),""])
 
-def showUV(clip):
+def showUV(clip: vs.VideoNode) -> vs.VideoNode:
     return Expr(clip,["0",""])
 
 #inpand/expand
-def inpand(clip:vs.VideoNode,planes=0,thr=None,mode="square",cycle:int=1):
+def inpand(
+    clip:vs.VideoNode,
+    planes: int | Sequence[int] = 0,
+    thr: float | None = None,
+    mode: str = "square",
+    cycle: int = 1
+) -> vs.VideoNode:
     modemap={
         "square":[1,1,1,1,1,1,1,1],
         "horizontal":[0,0,0,1,1,0,0,0],
@@ -61,7 +67,13 @@ def inpand(clip:vs.VideoNode,planes=0,thr=None,mode="square",cycle:int=1):
         clip = core.std.Minimum(clip,planes,thr,cd)
     return clip
 
-def expand(clip:vs.VideoNode,planes=0,thr=None,mode="square",cycle=1):
+def expand(
+    clip:vs.VideoNode,
+    planes: int | Sequence[int] = 0,
+    thr: float | None = None,
+    mode: str = "square",
+    cycle: int = 1
+) -> vs.VideoNode:
     modemap={
         "square":[1,1,1,1,1,1,1,1],
         "horizontal":[0,0,0,1,1,0,0,0],
@@ -76,7 +88,7 @@ def expand(clip:vs.VideoNode,planes=0,thr=None,mode="square",cycle=1):
         clip = core.std.Maximum(clip,planes,thr,cd)
     return clip
 
-def getCSS(w,h):
+def getCSS(w:int,h:int) -> str:
     css={
         (1,1):"420",
         (1,0):"422",
@@ -90,11 +102,28 @@ def getCSS(w,h):
     else:
         return css[sub]
 
-def clip2css(clip):
+def clip2css(clip: vs.VideoNode) -> str:
     return getCSS(clip.format.subsampling_w,clip.format.subsampling_h)
 
-def nnedi3(clip,field,dh=False,dw=False,planes=None,nsize=6,nns=1,qual=1,etype=0,pscrn=2,exp=0,
-           mode="znedi3",device=-1,list_device=False,info=False,int16_predictor=True,int16_prescreener=True):
+def nnedi3(
+    clip: vs.VideoNode,
+    field: int,
+    dh: bool | None = False,
+    dw: bool | None = False,
+    planes: VSFuncType = None,
+    nsize: int | None = 6,
+    nns: int | None = 1,
+    qual: int | None = 1,
+    etype: int | None = 0,
+    pscrn: int | None = 2,
+    exp: int | None = 0,
+    mode: str = "znedi3",
+    device: int | None = -1,
+    list_device: bool | None = False,
+    info: bool | None = False,
+    int16_predictor: bool | None = True,
+    int16_prescreener: bool | None = True,
+) -> vs.VideoNode:
     mode=mode.lower()
     if mode=="nnedi3":
         return core.nnedi3.nnedi3(clip,field=field, dh=dh, planes=planes, nsize=nsize, nns=nns, qual=qual, etype=etype, pscrn=pscrn,exp=exp,int16_predictor=int16_predictor,int16_prescreener=int16_prescreener)
@@ -107,20 +136,60 @@ def nnedi3(clip,field,dh=False,dw=False,planes=None,nsize=6,nns=1,qual=1,etype=0
     else:
         raise ValueError("Unknown mode,mode must in ['nnedi3','nnedi3cl','znedi3','sneedif']")
 
-def eedi3(clip, field, dh=None, planes=None, alpha=None, beta=None, gamma=None, nrad=None, mdis=None,
-        hp=None, ucubic=None, cost3=None, vcheck=None, vthresh0=None, vthresh1=None, vthresh2=None, sclip=None,
-        mode="eedi3m",device=None,list_device=None,info=None,opt=None):
+def eedi3(
+    clip: vs.VideoNode, 
+    field: int, 
+    dh: bool | None = None, 
+    planes: PlanesType = None, 
+    alpha: float | None = None, 
+    beta: float | None = None, 
+    gamma: float | None = None, 
+    nrad: int | None = None, 
+    mdis: int | None = None,
+    hp: int | None = None, 
+    ucubic: int | None = None, 
+    cost3: int | None = None, 
+    vcheck: int | None = None, 
+    vthresh0: float | None = None, 
+    vthresh1: float | None = None, 
+    vthresh2: float | None = None, 
+    sclip: vs.VideoNode | None = None,
+    mclip: vs.VideoNode | None = None,
+    mode: str = "eedi3m",
+    device: int | None = None,
+    list_device: bool | None = None,
+    info: bool | None = None,
+    opt: int | None = None,
+) -> vs.VideoNode:
     mode=mode.lower()
     if mode=="eedi3m":
-        return clip.eedi3m.EEDI3(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip, opt)
+        return clip.eedi3m.EEDI3(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip, mclip, opt)
     elif mode=="eedi3cl":
-        return clip.eedi3m.EEDI3CL(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip, opt, device, list_device, info)
+        return clip.eedi3m.EEDI3CL(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip, mclip, opt, device, list_device, info)
     elif mode=="eedi3":
         return clip.eedi3.eedi3(field, dh, planes, alpha, beta, gamma, nrad, mdis, hp, ucubic, cost3, vcheck, vthresh0, vthresh1, vthresh2, sclip)
     else:
         raise ValueError("Unknown mode,mode must in ['eedi3m,eedi3,eedi3cl']")
 
-def nlm(clip,d=1,a=2,s=4,h=12,channels='auto',wmode=0,wref=1.0,rclip=None,device_type="auto",device_id=0,ocl_x=0,ocl_y=0,ocl_r=0,info=False,num_streams=1,mode="nlm_ispc"):
+def nlm(
+    clip: vs.VideoNode,
+    d: int | None = 1,
+    a: int | None = 2,
+    s: int | None = 4,
+    h: float | None = 12,
+    channels: str | None = 'auto',
+    wmode: int | None = 0,
+    wref: float | None = 1.0,
+    rclip: vs.VideoNode | None = None,
+    device_type: str | None = "auto",
+    device_id: int | None = 0,
+    ocl_x: int | None = 0,
+    ocl_y: int | None = 0,
+    ocl_r: int | None = 0,
+    info: bool | None = False,
+    num_streams: int | None = 1,
+    mode: str | None = "nlm_ispc",
+) -> vs.VideoNode:
     mode=mode.lower()
     if mode=="knl" or mode=="knlmeanscl":
         return core.knlm.KNLMeansCL(clip,d=d,a=a,s=s,h=h,channels=channels,wmode=wmode,wref=wref,rclip=rclip,device_type=device_type,device_id=device_id,ocl_x=ocl_x,ocl_y=ocl_y,ocl_r=ocl_r,info=info)
@@ -131,7 +200,13 @@ def nlm(clip,d=1,a=2,s=4,h=12,channels='auto',wmode=0,wref=1.0,rclip=None,device
     else:
         raise ValueError("Unknown mode,mode must in ['knlmeanscl','nlm_ispc','nlm_cuda']")
 #copy from havsfunc
-def mt_expand_multi(src, mode='rectangle', planes=None, sw=1, sh=1):
+def mt_expand_multi(
+    src: vs.VideoNode, 
+    mode: str | None = 'rectangle', 
+    planes: PlanesType = None, 
+    sw: int = 1, 
+    sh: int = 1
+) -> vs.VideoNode:
     """
     mt_expand_multi
     mt_inpand_multi
@@ -166,7 +241,13 @@ def mt_expand_multi(src, mode='rectangle', planes=None, sw=1, sh=1):
     return src
 
 #copy from havsfunc
-def mt_inpand_multi(src, mode='rectangle', planes=None, sw=1, sh=1):
+def mt_inpand_multi(
+    src: vs.VideoNode, 
+    mode: str | None = 'rectangle', 
+    planes: PlanesType = None, 
+    sw: int = 1, 
+    sh: int = 1
+) -> vs.VideoNode:
     """
     mt_expand_multi
     mt_inpand_multi
@@ -200,7 +281,11 @@ def mt_inpand_multi(src, mode='rectangle', planes=None, sw=1, sh=1):
         src = mt_inpand_multi(src.std.Minimum(planes=planes, coordinates=mode_m), mode=mode, planes=planes, sw=sw - 1, sh=sh - 1)
     return src
 
-def mt_inflate_multi(src, planes=None, radius=1):
+def mt_inflate_multi(
+    src: vs.VideoNode, 
+    planes: PlanesType = None, 
+    radius: int = 1,
+) -> vs.VideoNode:
     if not isinstance(src, vs.VideoNode):
         raise vs.Error('mt_inflate_multi: this is not a clip')
 
@@ -208,7 +293,11 @@ def mt_inflate_multi(src, planes=None, radius=1):
         src = core.std.Inflate(src, planes=planes)
     return src
 
-def mt_deflate_multi(src, planes=None, radius=1):
+def mt_deflate_multi(
+    src: vs.VideoNode, 
+    planes: PlanesType = None, 
+    radius: int = 1,
+) -> vs.VideoNode:
     if not isinstance(src, vs.VideoNode):
         raise vs.Error('mt_deflate_multi: this is not a clip')
 
@@ -216,7 +305,17 @@ def mt_deflate_multi(src, planes=None, radius=1):
         src = core.std.Deflate(src, planes=planes)
     return src
 
-def LimitFilter(flt, src, ref=None, thr=None, elast=None, brighten_thr=None, thrc=None, planes=None,use_vszip=None):
+def LimitFilter(
+    flt: vs.VideoNode,
+    src: vs.VideoNode, 
+    ref: float | None = None, 
+    thr: float | None = None, 
+    elast: float | None = None, 
+    brighten_thr: float | None = None, 
+    thrc: float | None = None, 
+    planes: PlanesType = None,
+    use_vszip: bool | None = None,
+) -> vs.VideoNode:
     """
     Similar to the AviSynth function Dither_limit_dif16() and HQDeringmod_limit_dif16().
     It acts as a post-processor, and is very useful to limit the difference of filtering while avoiding artifacts.
@@ -437,16 +536,22 @@ def _limit_filter_expr(defref, thr, elast, largen_thr, value_range):
 
     return limitExpr
 
-def cround(x):
+def cround(x: float) -> int:
     return math.floor(x + 0.5) if x > 0 else math.ceil(x - 0.5)
 
-def m4(x):
+def m4(x: int) -> int:
     return 16 if x < 16 else cround(x / 4) * 4
 
-def scale(value, peak):
+def scale(value: int, peak: int) -> (int | float):
     return cround(value * peak / 255) if peak != 1 else value / 255
 
-def Padding(clip: vs.VideoNode, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0) -> vs.VideoNode:
+def Padding(
+    clip: vs.VideoNode, 
+    left: int = 0, 
+    right: int = 0, 
+    top: int = 0, 
+    bottom: int = 0,
+) -> vs.VideoNode:
     if not isinstance(clip, vs.VideoNode):
         raise vs.Error('Padding: this is not a clip')
 

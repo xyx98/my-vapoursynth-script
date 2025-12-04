@@ -9,10 +9,17 @@ def _IQA_downsample(clip: vs.VideoNode) -> vs.VideoNode:
     return core.std.Convolution(clip, [1, 1, 0, 1, 1, 0, 0, 0, 0]).resize.Point(clip.width // 2, clip.height // 2, src_left=-1, src_top=-1)
 
 #modified from muvsfunc
-def SSIM(clip1: vs.VideoNode, clip2: vs.VideoNode, plane: Optional[int] = None,
-         downsample: bool = True, k1: float = 0.01, k2: float = 0.03,
-         fun: Optional[VSFuncType] = None, dynamic_range: int = 1,
-         show_map: bool = False) -> vs.VideoNode:
+def SSIM(
+    clip1: vs.VideoNode, 
+    clip2: vs.VideoNode, 
+    plane: int | None = None,
+    downsample: bool = True, 
+    k1: float = 0.01, 
+    k2: float = 0.03,
+    fun: VSFuncType | float | None = None, 
+    dynamic_range: int = 1,
+    show_map: bool = False
+) -> vs.VideoNode:
     """Structural SIMilarity Index Calculator
 
     The Structural SIMilarity (SSIM) index is a method for measuring the similarity between two images.
@@ -134,9 +141,14 @@ def SSIM(clip1: vs.VideoNode, clip2: vs.VideoNode, plane: Optional[int] = None,
     return output_clip
 
 #modified from muvsfunc
-def GMSD(clip1: vs.VideoNode, clip2: vs.VideoNode, plane: Optional[int] = None,
-         downsample: bool = True, c: float = 0.0026, show_map: bool = False
-         ) -> vs.VideoNode:
+def GMSD(
+    clip1: vs.VideoNode, 
+    clip2: vs.VideoNode, 
+    plane: int | None = None,
+    downsample: bool = True, 
+    c: float = 0.0026, 
+    show_map: bool = False
+) -> vs.VideoNode:
     """Gradient Magnitude Similarity Deviation Calculator
 
     GMSD is a new effective and efficient image quality assessment (IQA) model, which utilizes the pixel-wise gradient magnitude similarity (GMS)
@@ -236,7 +248,11 @@ def GMSD(clip1: vs.VideoNode, clip2: vs.VideoNode, plane: Optional[int] = None,
     return output_clip
 
 
-def getsharpness(clip,show=False,usePropExpr=False):
+def getsharpness(
+    clip: vs.VideoNode,
+    show: bool = False,
+    usePropExpr: bool = False,
+) -> vs.VideoNode:
     luma=getY(clip).fmtc.bitdepth(bits=16)
     blur=core.rgvs.RemoveGrain(luma, 20)
     dif=Expr([luma,blur],[f"x y - 65535 / 2 pow 65535 *"])

@@ -1,6 +1,18 @@
 from .utils import *
 
-def rescale(src:vs.VideoNode,kernel:str,w:int=None,h:int=None,mask:Union[bool,vs.VideoNode]=True,mask_dif_pix:float=2,show: str="result",postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,**args):
+def rescale(
+    src: vs.VideoNode,
+    kernel: str,
+    w: int | None = None,
+    h: int | None = None,
+    mask: bool | vs.VideoNode = True,
+    mask_dif_pix: float = 2,
+    show: str = "result",
+    postfilter_descaled: VSFuncType | None = None,
+    mthr: Sequence[int] = [2,2],
+    maskpp: VSFuncType | None = None,
+    **args,
+) -> vs.VideoNode:
     """
     descale to target resolution and upscale by nnedi3_resample with optional mask and postfilter.
     -----------------------------------------------------------
@@ -60,7 +72,24 @@ def rescale(src:vs.VideoNode,kernel:str,w:int=None,h:int=None,mask:Union[bool,vs
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=True,mask_dif_pix=2,show="result",postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,selective=False,upper=0.0001,lower=0.00001,**args):
+def rescalef(
+    src: vs.VideoNode,
+    kernel: str,
+    w: float | None = None,
+    h: float | None = None,
+    bh: float | None = None,
+    bw: float | None = None,
+    mask: bool = True,
+    mask_dif_pix: float = 2,
+    show: str = "result",
+    postfilter_descaled: VSFuncType | None = None,
+    mthr: Sequence[int] = [2,2],
+    maskpp: VSFuncType | None = None,
+    selective: bool = False,
+    upper: float = 0.0001,
+    lower: float = 0.00001,
+    **args
+) -> vs.VideoNode:
     #for decimal resolution descale,refer to GetFnative
     if src.format.color_family not in [vs.YUV,vs.GRAY]:
         raise ValueError("input clip should be YUV or GRAY!")
@@ -119,7 +148,24 @@ def rescalef(src: vs.VideoNode,kernel: str,w=None,h=None,bh=None,bw=None,mask=Tr
     else:
         return core.std.ShufflePlanes([luma_rescale,src],[0,1,2],vs.YUV)
 
-def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Optional[int]=None,mask:bool=True,mask_dif_pix:float=2.5,postfilter_descaled=None,mthr:list[int]=[2,2],maskpp=None,selective_disable:bool=False,disable_thr:float=0.00001,showinfo=False,save=None,load=None,kindex=False,**args):
+def multirescale(
+    clip: vs.VideoNode,
+    kernels: Sequence[dict],
+    w: int | None = None,
+    h: int | None = None,
+    mask: bool = True,
+    mask_dif_pix: float = 2.5,
+    postfilter_descaled: VSFuncType | None = None,
+    mthr: Sequence[int] = [2,2],
+    maskpp: VSFuncType | None = None,
+    selective_disable: bool = False,
+    disable_thr: float = 0.00001,
+    showinfo: bool = False,
+    save: str | None = None,
+    load: str | None = None,
+    kindex: bool = False,
+    **args,
+) -> vs.VideoNode:
     clip=core.fmtc.bitdepth(clip,bits=16)
     luma=getY(clip)
     src_h,src_w=clip.height,clip.width
@@ -241,7 +287,12 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
     else:
         return core.std.ShufflePlanes([last,clip],[0,1,2],vs.YUV)
 
-def resize_core(kernel:str,taps: int=3,b: float=0,c: float=0):
+def resize_core(
+    kernel: str,
+    taps: int=3,
+    b: float=0,
+    c: float=0
+) -> VSFuncType:
     kernel=kernel.capitalize()
     if kernel in ["Bilinear","Spline16","Spline36","Spline64"]:
         return eval(f"core.resize.{kernel}")
@@ -250,7 +301,23 @@ def resize_core(kernel:str,taps: int=3,b: float=0,c: float=0):
     elif kernel == "Lanczos":
         return functools.partial(core.resize.Lanczos,filter_param_a=taps)
 
-def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: Union[bool,vs.VideoNode]=True,mask_dif_pix:float=2,postfilter_descaled=None,mthr:list[int]=[2,2],taps:int=3,b:float=0,c:float=0.5,multiple:float=1,maskpp=None,show:str="result",**args):
+def MRcore(
+    clip: vs.VideoNode,
+    kernel: str,
+    w: int,
+    h: int,
+    mask: bool | vs.VideoNode = True,
+    mask_dif_pix: float = 2,
+    postfilter_descaled: VSFuncType | None = None,
+    mthr:Sequence[int] = [2,2],
+    taps: int = 3,
+    b: float = 0,
+    c: float = 0.5,
+    multiple: float = 1,
+    maskpp: VSFuncType | None = None,
+    show: str = "result",
+    **args
+) -> vs.VideoNode:
     src_w,src_h=clip.width,clip.height
     clip32=core.fmtc.bitdepth(clip,bits=32)
     descaled=core.descale.Descale(clip32,width=w,height=h,kernel=kernel.lower(),taps=taps,b=b,c=c)
@@ -304,7 +371,25 @@ def MRcore(clip:vs.VideoNode,kernel:str,w:int,h:int,mask: Union[bool,vs.VideoNod
     elif show.lower()=="both": #result,mask,descaled
         return core.std.ModifyFrame(rescale,[diff,rescale],calc),core.std.ModifyFrame(mask,[diff,mask],calc),descaled
 
-def MRcoref(clip:vs.VideoNode,kernel:str,w:float,h:float,bh:int,bw:int=None,mask: Union[bool,vs.VideoNode]=True,mask_dif_pix:float=2,postfilter_descaled=None,mthr:list[int]=[2,2],taps:int=3,b:float=0,c:float=0.5,multiple:float=1,maskpp=None,show:str="result",**args):
+def MRcoref(
+    clip: vs.VideoNode,
+    kernel: str,
+    w: float,
+    h: float,
+    bh: int,
+    bw: int | None =None,
+    mask: bool | vs.VideoNode = True,
+    mask_dif_pix: float = 2,
+    postfilter_descaled: VSFuncType | None = None,
+    mthr: Sequence[int] = [2,2],
+    taps: int = 3,
+    b: float = 0,
+    c: float = 0.5,
+    multiple: float = 1,
+    maskpp: VSFuncType | None = None,
+    show: str = "result",
+    **args
+) -> vs.VideoNode:
 
     src_w,src_h=clip.width,clip.height
     cargs=cropping_args(src_w,src_h,h,bh,bw)
@@ -359,7 +444,7 @@ def MRcoref(clip:vs.VideoNode,kernel:str,w:float,h:float,bh:int,bw:int=None,mask
     elif show.lower()=="both": #result,mask,descaled
         return core.std.ModifyFrame(rescale,[diff,rescale],calc),core.std.ModifyFrame(mask,[diff,mask],calc),descaled
 
-def MRkernelgen(k,w=None,h=None,b=None,c=None,taps=None,mask=None,mask_dif_pix=None,mthr=None,pp=None,multiple=None,maskpp=None,fmode=None):
+def MRkernelgen(k,w=None,h=None,b=None,c=None,taps=None,mask=None,mask_dif_pix=None,mthr=None,pp=None,multiple=None,maskpp=None,fmode=None) -> dict:
     l=locals()
     tmp={}
     for i in l.keys():
@@ -368,8 +453,23 @@ def MRkernelgen(k,w=None,h=None,b=None,c=None,taps=None,mask=None,mask_dif_pix=N
     return tmp
 
 @deprecated("Not real needed function,no maintenance.")
-def dpidDown(src,width=None,height=None,Lambda=1.0,matrix_in=None,matrix=None,transfer_in="709",transfer=None,
-               primaries_in=None,primaries=None,css=None,depth=16,dither_type="error_diffusion",range_in=None,range_out=None):
+def dpidDown(
+    src: vs.VideoNode,
+    width: int | None = None,
+    height: int | None = None,
+    Lambda: float | None = 1.0,
+    matrix_in: str | None = None,
+    matrix: str | None = None,
+    transfer_in: str = "709",
+    transfer: str | None = None,
+    primaries_in: str | None = None,
+    primaries: str | None = None,
+    css: str | None = None,
+    depth: int = 16,
+    dither_type: str = "error_diffusion",
+    range_in:str = None,
+    range_out:str = None,
+) -> vs.VideoNode:
     """
     dpidDown
     --------------------------------

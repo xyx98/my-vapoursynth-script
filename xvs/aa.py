@@ -10,15 +10,15 @@ from .dehalo import abcxyz
 #modfied from old havsunc
 def daa(
     c: vs.VideoNode,
-    nsize: Optional[int] = None,
-    nns: Optional[int] = None,
-    qual: Optional[int] = None,
-    pscrn: Optional[int] = None,
-    int16_prescreener: Optional[bool] = None,
-    int16_predictor: Optional[bool] = None,
-    exp: Optional[int] = None,
+    nsize: int | None = None,
+    nns: int | None = None,
+    qual: int | None = None,
+    pscrn: int | None = None,
+    int16_prescreener: bool | None = None,
+    int16_predictor: bool | None = None,
+    exp: int | None = None,
     nnedi3_mode: str = "znedi3",
-    device: Optional[int] = None,
+    device: int | None = None,
 ) -> vs.VideoNode:
     '''
     Anti-aliasing with contra-sharpening by Didée.
@@ -36,7 +36,18 @@ def daa(
     DD = core.rgvs.Repair(shrpD, dblD, mode=13)
     return core.std.MergeDiff(dbl, DD)
 
-def XSAA(src,nsize=None,nns=2,qual=None,aamode=-1,maskmode=1,nnedi3_mode="znedi3",device=-1,linedarken=False,preaa=0):
+def XSAA(
+    src: vs.VideoNode,
+    nsize: int | None = None,
+    nns: int | None = 2,
+    qual: int | None = None,
+    aamode: int = -1,
+    maskmode: int = 1,
+    nnedi3_mode: str = "znedi3",
+    device: int = -1,
+    linedarken: bool = False,
+    preaa: int = 0,
+) -> vs.VideoNode:
     """
     xyx98's simple aa function
     only process luma
@@ -113,7 +124,19 @@ def XSAA(src,nsize=None,nns=2,qual=None,aamode=-1,maskmode=1,nnedi3_mode="znedi3
         last = core.std.ShufflePlanes([last,src],[0,1,2], colorfamily=vs.YUV)
     return last
 
-def mwaa(clip, aa_y=True, aa_c=False, cs_h=0, cs_v=0, aa_cmask=True, kernel_y=2, kernel_c=1, show=False,nnedi3_mode="znedi3",device=0):
+def mwaa(
+    clip: vs.VideoNode, 
+    aa_y: bool = True, 
+    aa_c: bool = False, 
+    cs_h: int = 0, 
+    cs_v: int = 0, 
+    aa_cmask: bool = True, 
+    kernel_y: int = 2, 
+    kernel_c: int = 1, 
+    show: bool = False,
+    nnedi3_mode: str = "znedi3",
+    device: int = 0,
+) -> vs.VideoNode:
     """
     Anti-Aliasing function
     Steal from other one's script. Most likely written by mawen1250.
@@ -175,7 +198,14 @@ def mwaa(clip, aa_y=True, aa_c=False, cs_h=0, cs_v=0, aa_cmask=True, kernel_y=2,
     ## output
     return aamask if show else aa_merge
 
-def drAA(src,drf=0.5,lraa=True,nnedi3_mode="znedi3",device=-1,pp=True):
+def drAA(
+    src: vs.VideoNode,
+    drf: int = 0.5,
+    lraa:bool = True,
+    nnedi3_mode: str = "znedi3",
+    device: int = -1,
+    pp: bool = True,
+) -> vs.VideoNode:
     """
     down resolution Anti-Aliasing for anime with heavy Aliasing
     only process luma
@@ -209,10 +239,10 @@ def drAA(src,drf=0.5,lraa=True,nnedi3_mode="znedi3",device=-1,pp=True):
         aaY=core.resize.Spline36(aaY,w,h)
 
     ##mask
-    mask1=core.std.Expr([aaY,Y],["x y - abs 16 * 12288 < 0 65535 ?"]).rgvs.RemoveGrain(3).rgvs.RemoveGrain(11)
+    mask1=Expr([aaY,Y],["x y - abs 16 * 12288 < 0 65535 ?"]).rgvs.RemoveGrain(3).rgvs.RemoveGrain(11)
     mask2=core.tcanny.TCanny(Y, sigma=0, mode=1,op=1,gmmax=30)
-    mask2=core.std.Expr(mask2,"x 14000 < 0 65535 ?").rgvs.RemoveGrain(3).rgvs.RemoveGrain(11)
-    mask=core.std.Expr([mask1,mask2],"x y min 256 < 0 65535 ?").rgvs.RemoveGrain(11)
+    mask2=Expr(mask2,"x 14000 < 0 65535 ?").rgvs.RemoveGrain(3).rgvs.RemoveGrain(11)
+    mask=Expr([mask1,mask2],"x y min 256 < 0 65535 ?").rgvs.RemoveGrain(11)
 
     #pp
     if pp:

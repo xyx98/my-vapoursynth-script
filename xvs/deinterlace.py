@@ -1,6 +1,20 @@
 from .utils import *
 
-def FIFP(src,mode=0,tff=True,mi=40,blockx=16,blocky=16,cthresh=8,chroma=False,metric=1,tc=True,_pass=1,opencl=False,device=-1):
+def FIFP(
+    src: vs.VideoNode,
+    mode: int = 0,
+    tff: bool = True,
+    mi: int = 40,
+    blockx: int = 16,
+    blocky: int = 16,
+    cthresh: int = 8,
+    chroma: bool = False,
+    metric: int = 1,
+    tc: bool = True,
+    _pass: int = 1,
+    opencl: int = False,
+    device: int = -1,
+) -> vs.VideoNode:
     """
     Fix Interlanced Frames in Progressive video
     ---------------------------------------
@@ -108,7 +122,33 @@ def FIFP(src,mode=0,tff=True,mi=40,blockx=16,blocky=16,cthresh=8,chroma=False,me
     else:
         raise ValueError("mode must be 0 or 1")
 
-def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vfm_chroma=True,vfm_block=(16,16),y0=16,y1=16,micmatch=1,cycle=5,vd_chroma=True,dupthresh=1.1,scthresh=15,vd_block=(32,32),pp=True,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
+def ivtc(
+    src: vs.VideoNode,
+    order:int = 1,
+    field:int = 2,
+    mode:int = 1,
+    mchroma:bool = True,
+    cthresh:int = 9,
+    mi:int = 80,
+    vfm_chroma:bool = True,
+    vfm_block: List[int] = [16,16],
+    y0:int = 16,
+    y1:int = 16,
+    micmatch:int = 1,
+    cycle:int = 5,
+    vd_chroma: bool = True,
+    dupthresh: float = 1.1,
+    scthresh: float = 15,
+    vd_block: List[int] = [32,32],
+    pp: bool = True,
+    nsize: int = 0,
+    nns: int = 1,
+    qual: int = 1,
+    etype: int = 0,
+    pscrn: int = 2,
+    opencl: bool = False,
+    device: int = -1,
+) -> vs.VideoNode:
     """
     warp function for vivtc with a simple post-process use nnedi3 or user-defined filter.
     """
@@ -132,9 +172,57 @@ def ivtc(src:vs.VideoNode,order=1,field=2,mode=1,mchroma=True,cthresh=9,mi=80,vf
 
     return core.vivtc.VDecimate(match,cycle=cycle,chroma=vd_chroma,dupthresh=dupthresh,scthresh=scthresh,blockx=vd_block[0],blocky=vd_block[1])
 
-def ivtc_t(src:vs.VideoNode,order:int=1,field:int=-1,mode:int=1,slow:int=1,mchroma:bool=True,y0:int=16,y1:int=16,scthresh:float=12.0,ubsco:bool=True,micmatching:int=1,mmsco:bool=True,cthresh:int=9,tfm_chroma:bool=True,tfm_block:list[int]=[16,16],mi:int=80,metric:int=0,mthresh:int=5,
-    td_mode:int=0,cycleR:int=1,cycle:int=5,rate:float=24000/1001,hybrid:int=0,vfrdec:int=1,dupThresh:float=None,vidThresh:float=None,sceneThresh:float=15,vidDetect:int=3,conCycle:int=None,conCycleTP:int=None,nt:int=0,vd_block:list[int]=[32,32],tcfv1:bool=True,se:bool=False,vd_chroma:bool=True,noblend:bool=True,maxndl:int=None,m2PA:bool=False,denoise:bool=False,ssd:bool=False,sdlim:int=0,
-    pp=-1,nsize=0,nns=1,qual=1,etype=0,pscrn=2,opencl=False,device=-1):
+def ivtc_t(
+    src: vs.VideoNode,
+    order: int = 1,
+    field: int = -1,
+    mode: int = 1,
+    slow: int = 1,
+    mchroma: bool = True,
+    y0: int = 16,
+    y1: int = 16,
+    scthresh: float = 12.0,
+    ubsco: bool = True,
+    micmatching: int = 1,
+    mmsco: bool = True,
+    cthresh: int = 9,
+    tfm_chroma: bool = True,
+    tfm_block: list[int] = [16,16],
+    mi: int = 80,
+    metric: int = 0,
+    mthresh: int = 5,
+    td_mode: int = 0,
+    cycleR: int = 1,
+    cycle: int = 5,
+    rate: float = 24000/1001 ,
+    hybrid: int = 0,
+    vfrdec: int = 1,
+    dupThresh: float | None = None,
+    vidThresh: float | None = None,
+    sceneThresh: float = 15,
+    vidDetect: int = 3,
+    conCycle: int = None,
+    conCycleTP: int = None,
+    nt: int = 0,
+    vd_block: list[int] = [32,32],
+    tcfv1: bool = True,
+    se: bool = False,
+    vd_chroma: bool = True,
+    noblend: bool = True,
+    maxndl: int = None,
+    m2PA: bool = False,
+    denoise: bool = False,
+    ssd: bool = False,
+    sdlim: int = 0,
+    pp: int = -1,
+    nsize: int = 0,
+    nns: int = 1,
+    qual: int = 1,
+    etype: int = 0,
+    pscrn: int = 2,
+    opencl: bool = False,
+    device: int = -1,
+) -> vs.VideoNode:
     """
     warp function for tivtc with a simple post-process use nnedi3 or user-defined filter.
     use pp=-1(default) to use nnedi3 or pp>0 to use tfm internal post-process.

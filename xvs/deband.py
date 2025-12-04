@@ -2,11 +2,19 @@ from .utils import *
 from .other import lowbitdepth_sim
 
 @deprecated("No maintenance.")
-def SAdeband(src,thr=128,f3kdb_arg={},smoothmask=0,Sdbclip=None,Smask=None,tvrange=True):
+def SAdeband(
+    src: vs.VideoNode,
+    thr: int = 128,
+    f3kdb_arg: dict = {},
+    smoothmask: int = 0,
+    Sdbclip: vs.VideoNode | None = None,
+    Smask: vs.VideoNode | None = None,
+    tvrange:bool = True,
+) -> vs.VideoNode:
     """
     Simple Adaptive Debanding
     -------------------------------------
-    thr: only pixel less then will be processed(only affect luma)，default is 128 and vaule is based on 8bit
+    thr: only pixel less then will be processed(only affect luma),default is 128 and vaule is based on 8bit
     f3kdb_arg:use a dict to set parameters of f3kdb
     smoothmask: -1: don't smooth the mask; 0: use removegrain mode11;
                          1: use removegrain mode20; 2: use removegrain mode19
@@ -36,7 +44,10 @@ def SAdeband(src,thr=128,f3kdb_arg={},smoothmask=0,Sdbclip=None,Smask=None,tvran
     return core.std.ShufflePlanes([merge,db],[0,1,2], colorfamily=vs.YUV)
 
 @deprecated("Strange idea,not really useful.")
-def lbdeband(clip:vs.VideoNode,dbit=6):
+def lbdeband(
+    clip: vs.VideoNode,
+    dbit: int = 6,
+) -> vs.VideoNode:
     """
     low bitdepth deband
     deband for flat area with heavy details through round to low bitdepth,limitfilter and f3kdb

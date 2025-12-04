@@ -1,11 +1,33 @@
 from .utils import *
 
-def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,mode="cpu",radius=0,radius2=None,chroma=False,fast=True,
-            block_step1=None,bm_range1=None, ps_num1=None, ps_range1=None,
-            block_step2=None,bm_range2=None, ps_num2=None, ps_range2=None,
-            extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT",
-            refine=1,dmode=0,
-            v2=False):
+def bm3d(
+    clip: vs.VideoNode,
+    sigma: float | Sequence[float] = [3,3,3],
+    sigma2: float | Sequence[float] | None = None,
+    preset: str = "fast",
+    preset2: str | None = None,
+    mode: str = "cpu",
+    radius: int = 0,
+    radius2: int = None,
+    chroma: bool = False,
+    fast: bool = True,
+    block_step1: int | Sequence[int] | None = None,
+    bm_range1: int | Sequence[int] | None = None, 
+    ps_num1: int | None = None, 
+    ps_range1: int | None = None,
+    block_step2: int | Sequence[int] | None = None,
+    bm_range2: int | Sequence[int] | None = None, 
+    ps_num2: int | None = None, 
+    ps_range2: int | None = None,
+    extractor_exp: int = 0,
+    device_id: int = 0,
+    bm_error_s: str = "SSD",
+    transform_2d_s: str = "DCT",
+    transform_1d_s: str = "DCT",
+    refine: int = 1,
+    dmode:int = 0,
+    v2:bool = False,
+) -> vs.VideoNode:
     """
     warp function for bm3dcpu,bm3dcuda,bm3dcuda_rtc,and bm3dhip,similar to mvs.bm3d but only main function(without colorspace tranform)
     due to difference  between bm3d and bm3d{cpu,cuda,cuda_rtc,hip},result will not match mvf.bm3d
@@ -109,7 +131,24 @@ def bm3d(clip:vs.VideoNode,sigma=[3,3,3],sigma2=None,preset="fast",preset2=None,
 
     return core.fmtc.bitdepth(flt,bits=bits,dmode=dmode)
 
-def bm3d_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=0,ps_num=2,ps_range=4,chroma=False,fast=True,extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT"):
+def bm3d_core(
+    clip: vs.VideoNode,
+    ref: vs.VideoNode | None = None,
+    mode: str = "cpu",
+    sigma: float | Sequence[float] = 3.0,
+    block_step: int | Sequence[int] = 8,
+    bm_range: int | Sequence[int] = 9,
+    radius: int = 0,
+    ps_num: int = 2,
+    ps_range: int = 4,
+    chroma: bool = False,
+    fast: bool = True,
+    extractor_exp: int = 0,
+    device_id: int = 0,
+    bm_error_s: str = "SSD",
+    transform_2d_s:str = "DCT",
+    transform_1d_s:str = "DCT",
+) -> vs.VideoNode:
     if mode not in ["cpu","cuda","cuda_rtc","hip"]:
         raise ValueError("mode must be cpu,or cuda,or cuda_rtc,or hip!")
     elif mode=="cpu":
@@ -121,7 +160,24 @@ def bm3d_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=
     else:
         return core.bm3dhip.BM3D(clip,ref=ref,sigma=sigma,block_step=block_step,bm_range=bm_range,radius=radius,ps_num=ps_num,ps_range=ps_range,chroma=chroma,fast=fast,extractor_exp=extractor_exp,device_id=device_id)
 
-def bm3dv2_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radius=0,ps_num=2,ps_range=4,chroma=False,fast=True,extractor_exp=0,device_id=0,bm_error_s="SSD",transform_2d_s="DCT",transform_1d_s="DCT"):
+def bm3dv2_core(
+    clip: vs.VideoNode,
+    ref: vs.VideoNode | None = None,
+    mode: str = "cpu",
+    sigma: float | Sequence[float] = 3.0,
+    block_step: int | Sequence[int] = 8,
+    bm_range: int | Sequence[int] = 9,
+    radius: int = 0,
+    ps_num: int = 2,
+    ps_range: int = 4,
+    chroma: bool = False,
+    fast: bool = True,
+    extractor_exp: int = 0,
+    device_id: int = 0,
+    bm_error_s: str = "SSD",
+    transform_2d_s: str = "DCT",
+    transform_1d_s: str = "DCT",
+) -> vs.VideoNode:
     if mode not in ["cpu","cuda","cuda_rtc","hip"]:
         raise ValueError("mode must be cpu,or cuda,or cuda_rtc,or hip!")
     elif mode=="cpu":
@@ -135,7 +191,16 @@ def bm3dv2_core(clip,ref=None,mode="cpu",sigma=3.0,block_step=8,bm_range=9,radiu
 
 
 @deprecated("No maintenance")
-def STPresso(clip=None, limit=3, bias=24, RGmode=4, tthr=12, tlimit=3, tbias=49, back=1):
+def STPresso(
+    clip: vs.VideoNode, 
+    limit: int = 3, 
+    bias: int = 24, 
+    RGmode: int = 4, 
+    tthr: int = 12, 
+    tlimit: int = 3, 
+    tbias: int = 49, 
+    back: int = 1,
+) -> vs.VideoNode:
     """
     STPresso
     ####################
@@ -192,7 +257,7 @@ def STPresso(clip=None, limit=3, bias=24, RGmode=4, tthr=12, tlimit=3, tbias=49,
     for i in range(0,3):
         C   = core.std.ShufflePlanes(clip, i, colorfamily=vs.GRAY)
         B = core.std.ShufflePlanes(bzz, i, colorfamily=vs.GRAY)
-        O = core.std.Expr([C,B],expr)
+        O = Expr([C,B],expr)
         L.append(O)
     if tthr!=0:
         st=core.flux.SmoothT(bzz, temporal_threshold=tthr, planes=[0, 1, 2])
@@ -202,16 +267,24 @@ def STPresso(clip=None, limit=3, bias=24, RGmode=4, tthr=12, tlimit=3, tbias=49,
         for i in range(0,3):
             c=L[i]
             b=core.std.ShufflePlanes(diff2, i, colorfamily=vs.GRAY)
-            L[i] = core.std.Expr([c,b],texpr)
+            L[i] = Expr([c,b],texpr)
     if back!=0:
         bexpr="x "+str(BK)+" + y < x "+str(BK)+" + x "+str(BK)+" - y > x "+str(BK)+" - y ? ?"
         Y = core.std.ShufflePlanes(clip, 0, colorfamily=vs.GRAY)
-        L[0] = core.std.Expr([L[0],Y],bexpr)
+        L[0] = Expr([L[0],Y],bexpr)
     output=core.std.ShufflePlanes(L, [0,0,0], colorfamily=vs.YUV)
     return output
 
 @deprecated("No maintenance")
-def SPresso(clip=None, limit=2, bias=25, RGmode=4, limitC=4, biasC=50, RGmodeC=0):
+def SPresso(
+    clip: vs.VideoNode, 
+    limit: int = 2, 
+    bias: int = 25, 
+    RGmode: int = 4, 
+    limitC: int = 4, 
+    biasC: int = 50, 
+    RGmodeC: int = 0,
+) -> vs.VideoNode:
     """
     SPresso
     #########################
@@ -261,14 +334,26 @@ def SPresso(clip=None, limit=2, bias=25, RGmode=4, limitC=4, biasC=50, RGmodeC=0
         exprC  =  "x y - abs " +str(scale(0,depth))+ " <= x x "+str(LIM1c)+" + y < x "+str(LIM2c)+" + x "+str(LIM1c)+" - y > x "+str(LIM2c)+" - "  + "x " +str(scale(100,depth))+" "+str(BIAc)+" - * y "+str(BIAc)+" * + "+str(scale(100,depth))+" / ? ? ?"
     ###
     rg = core.rgvs.RemoveGrain(clip,[RGmode,RGmodeC])
-    Y = core.std.Expr([getplane(clip,0),getplane(rg,0)],expr)
-    U = getplane(clip,1) if RGmodeC==0 else core.std.Expr([getplane(clip,1),getplane(rg,1)],exprC)
-    V = getplane(clip,2) if RGmodeC==0 else core.std.Expr([getplane(clip,2),getplane(rg,2)],exprC)
+    Y = Expr([getplane(clip,0),getplane(rg,0)],expr)
+    U = getplane(clip,1) if RGmodeC==0 else Expr([getplane(clip,1),getplane(rg,1)],exprC)
+    V = getplane(clip,2) if RGmodeC==0 else Expr([getplane(clip,2),getplane(rg,2)],exprC)
     last = core.std.ShufflePlanes([Y,U,V],[0,0,0], colorfamily=vs.YUV)
     return last
 
 @deprecated("No maintenance")
-def STPressoMC(clip=None, limit=3, bias=24, RGmode=4, tthr=12, tlimit=3, tbias=49, back=1,s_p={},a_p={},c_p={}):
+def STPressoMC(
+    clip: vs.VideoNode, 
+    limit: int = 3, 
+    bias: int = 24, 
+    RGmode: int = 4,
+    tthr: int = 12, 
+    tlimit: int = 3, 
+    tbias: int = 49, 
+    back: int = 1,
+    s_p: dict = {},
+    a_p: dict = {},
+    c_p: dict = {},
+) -> vs.VideoNode:
     """
     STPressoMC
     """
@@ -300,7 +385,7 @@ def STPressoMC(clip=None, limit=3, bias=24, RGmode=4, tthr=12, tlimit=3, tbias=4
     for i in range(0,3):
         C   = core.std.ShufflePlanes(clip, i, colorfamily=vs.GRAY)
         B = core.std.ShufflePlanes(bzz, i, colorfamily=vs.GRAY)
-        O = core.std.Expr([C,B],expr)
+        O = Expr([C,B],expr)
         L.append(O)
     if tthr!=0:
         st=FluxsmoothTMC(bzz,tthr,s_p,a_p,c_p,[0,1,2])
@@ -310,16 +395,23 @@ def STPressoMC(clip=None, limit=3, bias=24, RGmode=4, tthr=12, tlimit=3, tbias=4
         for i in range(0,3):
             c=L[i]
             b=core.std.ShufflePlanes(diff2, i, colorfamily=vs.GRAY)
-            L[i] = core.std.Expr([c,b],texpr)
+            L[i] = Expr([c,b],texpr)
     if back!=0:
         bexpr="x "+str(BK)+" + y < x "+str(BK)+" + x "+str(BK)+" - y > x "+str(BK)+" - y ? ?"
         Y = core.std.ShufflePlanes(clip, 0, colorfamily=vs.GRAY)
-        L[0] = core.std.Expr([L[0],Y],bexpr)
+        L[0] = Expr([L[0],Y],bexpr)
     output=core.std.ShufflePlanes(L, [0,0,0], colorfamily=vs.YUV)
     return output
 
 @deprecated("No maintenance")
-def FluxsmoothTMC(src,tthr=12,s_p={},a_p={},c_p={},planes=[0,1,2]):
+def FluxsmoothTMC(
+    src: vs.VideoNode,
+    tthr: int = 12,
+    s_p: dict = {},
+    a_p: dict = {},
+    c_p: dict = {},
+    planes: PlanesType = [0,1,2],
+):
     """
     port from https://forum.doom9.org/showthread.php?s=d58237a359f5b1f2ea45591cceea5133&p=1572664#post1572664
     allow setting parameters for mvtools

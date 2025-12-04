@@ -3,7 +3,14 @@ from .metrics import getsharpness
 from .dehalo import EdgeCleaner
 
 @deprecated("No maintenance.")
-def xsUSM(src=None,blur=11,limit=1,elast=4,maskclip=None,plane=[0]):
+def xsUSM(
+    src: vs.VideoNode,
+    blur: int = 11,
+    limit: float = 1,
+    elast: float = 4,
+    maskclip: vs.VideoNode | None = None,
+    plane: PlanesType = [0],
+) -> vs.VideoNode:
     """
     xsUSM: xyx98's simple unsharp mask
     -----------------------------------------------
@@ -40,10 +47,12 @@ def xsUSM(src=None,blur=11,limit=1,elast=4,maskclip=None,plane=[0]):
         else:
             m = lt
         return m
+
     if isGray:
         return usm(src,blur,limit,elast,maskclip)
     else:
         li=[]
+        plane= [plane] if isinstance(plane,int) else plane
         for i in range(3):
             if i in plane:
                 a=usm(getplane(src,i),blur,limit,elast,None if maskclip is None else getplane(maskclip,i))
@@ -53,7 +62,11 @@ def xsUSM(src=None,blur=11,limit=1,elast=4,maskclip=None,plane=[0]):
         return core.std.ShufflePlanes(li,[0,0,0], vs.YUV)
 
 @deprecated("No maintenance.")    
-def SharpenDetail(src=None,limit=4,thr=32):
+def SharpenDetail(
+    src: vs.VideoNode,
+    limit: float = 4,
+    thr: int = 32,
+) -> vs.VideoNode:
     """
     SharpenDetail
     ------------------------------------
@@ -71,7 +84,7 @@ def SharpenDetail(src=None,limit=4,thr=32):
     thr = thr*depth/8
     bia = 128*depth/8
     blur = core.rgvs.RemoveGrain(clip,19)
-    mask = core.std.Expr([clip,blur],"x y - "+str(thr)+" * "+str(bia)+" +")
+    mask = Expr([clip,blur],"x y - "+str(thr)+" * "+str(bia)+" +")
     mask = core.rgvs.RemoveGrain(mask,2)
     mask = inpand(mask,mode="both")
     mask = core.std.Deflate(mask)
@@ -81,8 +94,15 @@ def SharpenDetail(src=None,limit=4,thr=32):
         last = core.std.ShufflePlanes([last,src],[0,1,2], vs.YUV)
     return last
 
-#modify from havsfunc
-def FastLineDarkenMOD(c, strength=48, protection=5, luma_cap=191, threshold=4, thinning=0):
+#modify from old havsfunc
+def FastLineDarkenMOD(
+    c: vs.VideoNode, 
+    strength: float = 48, 
+    protection: float = 5, 
+    luma_cap: float = 191, 
+    threshold: float = 4, 
+    thinning: float = 0,
+) -> vs.VideoNode:
     """
     ##############################
     # FastLineDarken 1.4x MT MOD #
@@ -147,7 +167,17 @@ def FastLineDarkenMOD(c, strength=48, protection=5, luma_cap=191, threshold=4, t
     return last
 
 
-def mwenhance(diffClip, chroma=False, Strength=2.0, Szrp8=8, Spwr=4, SdmpLo=4, SdmpHi=48, Soft=0, useExpr=False):
+def mwenhance(
+    diffClip: vs.VideoNode, 
+    chroma: bool = False, 
+    Strength: float = 2.0, 
+    Szrp8: int = 8,
+    Spwr: int = 4, 
+    SdmpLo: int = 4, 
+    SdmpHi: int = 48, 
+    Soft: int = 0, 
+    useExpr: bool = False,
+) -> vs.VideoNode:
     """
     high frequency enhance
     Steal from other one's script. Most likely written by mawen1250.
@@ -175,21 +205,21 @@ def mwenhance(diffClip, chroma=False, Strength=2.0, Szrp8=8, Spwr=4, SdmpLo=4, S
 
     if useExpr:
         #generate expr
-        diff=' x {neutral} - '.format(neutral=neutral)
-        absDiff=' {diff} abs '.format(diff=diff)
-        diff8=' {diff} {bpsMul8} / '.format(diff=diff,bpsMul8=bpsMul8)
-        absDiff8=' {diff8} abs '.format(diff8=diff8)
-        diff8Sqr = ' {diff8} {diff8} * '.format(diff8=diff8)
-        signMul=' {diff} 0 >= 1 -1 ? '.format(diff=diff)
+        diff = f' x {neutral} - '
+        absDiff = f' {diff} abs '
+        diff8 = f' {diff} {bpsMul8} / '
+        absDiff8 = f' {diff8} abs '
+        diff8Sqr = f' {diff8} {diff8} * '
+        signMul = f' {diff} 0 >= 1 -1 ? '
 
-        res1=' {absDiff} {Szrp} / {miSpwr} pow {SzrpMulStrength} * {signMul} * '.format(absDiff=absDiff,Szrp=Szrp,miSpwr=miSpwr,SzrpMulStrength=SzrpMulStrength,signMul=signMul)
-        res2=' {diff8Sqr} {Szrp8SqrPlusSdmpLo} * {diff8Sqr} {SdmpLo} + {Szrp8Sqr} * / '.format(diff8Sqr=diff8Sqr,Szrp8SqrPlusSdmpLo=Szrp8SqrPlusSdmpLo,SdmpLo=SdmpLo,Szrp8Sqr=Szrp8Sqr)
-        res3=' 0 ' if SdmpHiEqual0 else ' {absDiff8} {SdmpHi} / 4 pow '.format(absDiff8=absDiff8,SdmpHi=SdmpHi)
+        res1=f' {absDiff} {Szrp} / {miSpwr} pow {SzrpMulStrength} * {signMul} * '
+        res2=f' {diff8Sqr} {Szrp8SqrPlusSdmpLo} * {diff8Sqr} {SdmpLo} + {Szrp8Sqr} * / '
+        res3=' 0 ' if SdmpHiEqual0 else f' {absDiff8} {SdmpHi} / 4 pow '
 
-        enhanced=' {res1} {res2} * {Szrp8DivSdmpHiPower4Plus1} * 1 {res3} + /'.format(res1=res1,res2=res2,res3=res3,Szrp8DivSdmpHiPower4Plus1=Szrp8DivSdmpHiPower4Plus1)
-        enhanced=' {ceil} {floor} {neutral} {enhanced} + max min '.format(ceil=ceil,floor=floor,neutral=neutral,enhanced=enhanced)
+        enhanced=f' {res1} {res2} * {Szrp8DivSdmpHiPower4Plus1} * 1 {res3} + /'
+        enhanced=f' {ceil} {floor} {neutral} {enhanced} + max min '
 
-        expr=' x {neutral} = x {enhanced} ? '.format(neutral=neutral,enhanced=enhanced)
+        expr=f' x {neutral} = x {enhanced} ? '
 
         #apply expr
         if diffClip.format.num_planes==1:
@@ -223,12 +253,29 @@ def mwenhance(diffClip, chroma=False, Strength=2.0, Szrp8=8, Spwr=4, SdmpLo=4, S
     if Soft > 0:
         diffClipEhSoft = diffClip.rgvs.RemoveGrain([19, 19 if chroma else 0])
         diffClipEhSoft = diffClipEhSoft if Soft >= 1 else core.std.Merge(diffClip, diffClipEhSoft, [1 - Soft, Soft])
-        limitDiffExpr=' x {neutral} - abs y {neutral} - abs <= x y ? '.format(neutral=neutral)
+        limitDiffExpr=f' x {neutral} - abs y {neutral} - abs <= x y ? '
         diffClip = Expr([diffClip, diffClipEhSoft], [limitDiffExpr, limitDiffExpr if chroma else ''])
     # output
     return diffClip
 
-def mwcfix(clip, kernel=1, restore=5, a=2, grad=2, warp=6, thresh=96, blur=3, repair=1, cs_h=0, cs_v=0,nlm_mode="nlm_ispc",nlm_device_type="auto",nlm_device_id=0,nnedi3_mode="znedi3",nnedi3_device=-1):
+def mwcfix(
+    clip: vs.VideoNode, 
+    kernel: int = 1, 
+    restore: float = 5, 
+    a: int = 2, 
+    grad: int = 2, 
+    warp: int = 6, 
+    thresh: int = 96, 
+    blur: int = 3, 
+    repair: int = 1, 
+    cs_h: int = 0, 
+    cs_v: int = 0,
+    nlm_mode: str = "nlm_ispc",
+    nlm_device_type: str = "auto",
+    nlm_device_id: int = 0,
+    nnedi3_mode: str = "znedi3",
+    nnedi3_device: str = -1,
+) -> vs.VideoNode:
     """
     chroma restoration
     Steal from other one's script. Most likely written by mawen1250.
@@ -312,7 +359,12 @@ def mwcfix(clip, kernel=1, restore=5, a=2, grad=2, warp=6, thresh=96, blur=3, re
     return final
 
 @deprecated("Strange idea,not really useful.")
-def ssharp(clip,chroma=True,mask=False,compare=False):
+def ssharp(
+    clip: vs.VideoNode,
+    chroma: bool = True,
+    mask: bool = False,
+    compare: bool = False,
+) -> vs.VideoNode:
     """
     slightly sharp through bicubic
     """
@@ -325,11 +377,11 @@ def ssharp(clip,chroma=True,mask=False,compare=False):
         last=core.rgvs.Repair(sha, src, 13)
         last=LimitFilter(src, last, thr=1, thrc=0.5, elast=6, brighten_thr=0.5, planes=[0,1,2])
         if mask:
-            mask1=src.tcanny.TCanny(sigma=0.5, t_h=20.0, t_l=8.0,mode=1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
+            mask1=Expr(core.tcanny.TCanny(src,sigma=0.5, t_h=20.0, t_l=8.0,mode=1),"x 30000 < 0 x ?").rgvs.RemoveGrain(4)
             mask1=inpand(expand(mask1,cycle=1),cycle=1)
-            mask2=core.std.Expr([last,src],"x y - abs 96 *").rgvs.RemoveGrain(4)
-            mask2=core.std.Expr(mask2,"x 30000 < 0 x ?")
-            mask=core.std.Expr([mask1,mask2],"x y min")
+            mask2=Expr([last,src],"x y - abs 96 *").rgvs.RemoveGrain(4)
+            mask2=Expr(mask2,"x 30000 < 0 x ?")
+            mask=Expr([mask1,mask2],"x y min")
             last=core.std.MaskedMerge(last, src, mask,[0,1,2])
     elif not chroma:
         srcy=getY(src)
@@ -337,11 +389,11 @@ def ssharp(clip,chroma=True,mask=False,compare=False):
         last=core.rgvs.Repair(sha, srcy, 13)
         last=LimitFilter(srcy, last, thr=1,elast=6, brighten_thr=0.5, planes=0)
         if mask:
-            mask1=srcy.tcanny.TCanny(sigma=0.5, t_h=20.0, t_l=8.0,mode=1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
+            mask1=Expr(core.tcanny.TCanny(srcy,sigma=0.5, t_h=20.0, t_l=8.0,mode=1),"x 30000 < 0 x ?").rgvs.RemoveGrain(4)
             mask1=inpand(expand(mask1,cycle=1),cycle=1)
-            mask2=core.std.Expr([last,srcy],"x y - abs 96 *").rgvs.RemoveGrain(4)
-            mask2=core.std.Expr(mask2,"x 30000 < 0 x ?")
-            mask=core.std.Expr([mask1,mask2],"x y min")
+            mask2=Expr([last,srcy],"x y - abs 96 *").rgvs.RemoveGrain(4)
+            mask2=Expr(mask2,"x 30000 < 0 x ?")
+            mask=Expr([mask1,mask2],"x y min")
             last=core.std.MaskedMerge(last, srcy, mask,0)
         last=core.std.ShufflePlanes([last,src], [0,1,2],colorfamily=vs.YUV)
     elif isGRAY:
@@ -349,18 +401,24 @@ def ssharp(clip,chroma=True,mask=False,compare=False):
         last=core.rgvs.Repair(sha, src, 13)
         last=LimitFilter(src, last, thr=1, thrc=0.5, elast=6, brighten_thr=0.5)
         if mask:
-            mask1=src.tcanny.TCanny(sigma=0.5, t_h=20.0, t_l=8.0,mode=1).std.Expr("x 30000 < 0 x ?").rgvs.RemoveGrain(4)
+            mask1=Expr(core.tcanny.TCanny(src,sigma=0.5, t_h=20.0, t_l=8.0,mode=1),"x 30000 < 0 x ?").rgvs.RemoveGrain(4)
             mask1=inpand(expand(mask1,cycle=1),cycle=1)
-            mask2=core.std.Expr([last,src],"x y - abs 96 *").rgvs.RemoveGrain(4)
-            mask2=core.std.Expr(mask2,"x 30000 < 0 x ?")
-            mask=core.std.Expr([mask1,mask2],"x y min")
+            mask2=Expr([last,src],"x y - abs 96 *").rgvs.RemoveGrain(4)
+            mask2=Expr(mask2,"x 30000 < 0 x ?")
+            mask=Expr([mask1,mask2],"x y min")
             last=core.std.MaskedMerge(last, src, mask)
     if not compare:
         return last
     else:
         return core.std.Interleave([src.text.Text("src"),last.text.Text("sharp")])
     
-def SCSharpen(clip:vs.VideoNode,ref:vs.VideoNode,max_sharpen_weight=0.3,min_sharpen_weight=0,clean=True):
+def SCSharpen(
+    clip:vs.VideoNode,
+    ref:vs.VideoNode,
+    max_sharpen_weight: float = 0.3,
+    min_sharpen_weight: float = 0,
+    clean: bool = True,
+) -> vs.VideoNode:
     """
     Sharpness Considered Sharpen:
     It mainly design for sharpen a bad source after blurry filtered such as strong AA, and source unsuited to be reference when you want sharpen filtered clip to match the sharpness of source.

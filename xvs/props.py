@@ -1,7 +1,15 @@
 from .utils import *
 from .metrics import SSIM,GMSD
 
-def statsinfo2csv(clip,plane=None,Max=True,Min=True,Avg=False,bits=8,namebase=None):
+def statsinfo2csv(
+    clip: vs.VideoNode,
+    plane: PlanesType = None,
+    Max: bool = True,
+    Min: bool = True,
+    Avg: bool = False,
+    bits: int = 8,
+    namebase: str | None = None,
+) -> vs.VideoNode:
     """
     write PlaneStats(Max,Min,Avg) to csv
     """
@@ -53,7 +61,7 @@ def statsinfo2csv(clip,plane=None,Max=True,Min=True,Avg=False,bits=8,namebase=No
             plane=[0,1,2]
     elif isinstance(plane,int):
         plane=[plane]
-    elif not isinstance(plane,(list,tuple)):
+    elif not isinstance(plane,Sequence):
         raise TypeError()
     ###############
     for i in plane:
@@ -61,9 +69,18 @@ def statsinfo2csv(clip,plane=None,Max=True,Min=True,Avg=False,bits=8,namebase=No
         clip = info(clip,name,i)
     return clip
 
-def ssim2csv(clip1,clip2,file="ssim.csv",planes=None, downsample=True, k1=0.01, k2=0.03, fun=None, dynamic_range=1):
+def ssim2csv(
+    clip1: vs.VideoNode,
+    clip2: vs.VideoNode,
+    file: str = "ssim.csv",
+    planes: PlanesType = None, 
+    downsample: bool = True, 
+    k1: float = 0.01, 
+    k2: float = 0.03, 
+    fun: VSFuncType | float | None = None, 
+    dynamic_range: int = 1,
+) -> vs.VideoNode:
     """
-    Warp function for ssim in muvsfunc
     Calculate SSIM and write to a csv
     Args:
         clip1: The distorted clip, will be copied to output.
@@ -72,7 +89,7 @@ def ssim2csv(clip1,clip2,file="ssim.csv",planes=None, downsample=True, k1=0.01, 
 
         file:  output file name
 
-        plane: (int/list) Specify which planes to be processed. Default is None.
+        planes: (int/int[]) Specify which planes to be processed. Default is None.
 
         downsample: (bool) Whether to average the clips over local 2x2 window and downsample by a factor of 2 before calculation.
             Default is True.
@@ -150,9 +167,15 @@ def ssim2csv(clip1,clip2,file="ssim.csv",planes=None, downsample=True, k1=0.01, 
         raise TypeError("unsupport format")
     return last
 
-def GMSD2csv(clip1,clip2,file="GMSD.csv",planes=None, downsample=True,c=0.0026):
+def GMSD2csv(
+    clip1: vs.VideoNode,
+    clip2: vs.VideoNode,
+    file: str = "GMSD.csv",
+    planes: PlanesType = None, 
+    downsample: bool = True,
+    c: float = 0.0026,
+) -> vs.VideoNode:
     """
-    Warp function for GMSD in muvsfunc
     Calculate GMSD and write to a csv
 
     GMSD is a new effective and efficient image quality assessment (IQA) model, which utilizes the pixel-wise gradient magnitude similarity (GMS)
@@ -171,7 +194,7 @@ def GMSD2csv(clip1,clip2,file="GMSD.csv",planes=None, downsample=True,c=0.0026):
 
         file:  output file name
 
-        plane: (int/list) Specify which planes to be processed. Default is None.
+        planes: (int/int[]) Specify which planes to be processed. Default is None.
 
         downsample: (bool) Whether to average the clips over local 2x2 window and downsample by a factor of 2 before calculation.
             Default is True.
@@ -243,7 +266,15 @@ def GMSD2csv(clip1,clip2,file="GMSD.csv",planes=None, downsample=True,c=0.0026):
         raise TypeError("unsupport format")
     return last
 
-def csv2props(clip:vs.VideoNode,file:str,sep:str="\t",props:list[list]=None,rawfilter=None,strict=False,charset="utf-8"):
+def csv2props(
+    clip: vs.VideoNode,
+    file: str,
+    sep: str = "\t",
+    props: list[list] | None = None,
+    rawfilter: Callable | None = None,
+    strict: bool = False,
+    charset: str = "utf-8",
+) -> vs.VideoNode:
     """
     csv file must contain a column use "n" as title to log frame number,all values should be int >=0.
     props:
@@ -327,7 +358,15 @@ def csv2props(clip:vs.VideoNode,file:str,sep:str="\t",props:list[list]=None,rawf
     last=core.std.ModifyFrame(clip,clip,attach)
     return last
 
-def props2csv(clip:vs.VideoNode,props:list,titles:list,output="info.csv",sep="\t",charset="utf-8",tostring=None):
+def props2csv(
+    clip: vs.VideoNode,
+    props: list,
+    titles: list,
+    output: str = "info.csv",
+    sep: str = "\t",
+    charset: str = "utf-8",
+    tostring: Callable = None,
+) -> vs.VideoNode:
     """
     write props which you chosen to csv
     you can rewrite tostring function to process props before write to csv
@@ -352,7 +391,11 @@ def props2csv(clip:vs.VideoNode,props:list,titles:list,output="info.csv",sep="\t
         file.close()
     return core.std.FrameEval(clip, functools.partial(tocsv, clip=clip),prop_src=clip)
 
-def getPictType(clip,txt=None,show=True):
+def getPictType(
+    clip: vs.VideoNode,
+    txt: str | None = None,
+    show: bool = True,
+) -> vs.VideoNode:
     """
     getPictType
     """
