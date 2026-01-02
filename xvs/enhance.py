@@ -417,14 +417,16 @@ def SCSharpen(
     ref:vs.VideoNode,
     max_sharpen_weight: float = 0.3,
     min_sharpen_weight: float = 0,
-    clean: bool = True,
+    clean: int | bool = 0,
+    use_psi: bool = False,
 ) -> vs.VideoNode:
     """
     Sharpness Considered Sharpen:
     It mainly design for sharpen a bad source after blurry filtered such as strong AA, and source unsuited to be reference when you want sharpen filtered clip to match the sharpness of source.
     It use cas as sharpen core,and calculate sharpness of source(reference clip),filtered clip (the clip you want sharpen),and sharpen clip(by cas).Use these sharpness information adjust merge weight of filtered clip and sharpen clip.
     ############################
-    If clean is True,use EdgeCleaner clean edge after sharpen.
+    If clean is 1,use EdgeCleaner clean edge after final sharpen.
+    If clean is 2,use EdgeCleaner clean edge after cas.
     Don't use high max_sharpen_weight or you might need addition filter to resolve artifacts cause by cas(1).
     only luma processed,output is always 16bit.
     """
@@ -433,6 +435,10 @@ def SCSharpen(
     
     if min_sharpen_weight >1 or min_sharpen_weight <0  or max_sharpen_weight<min_sharpen_weight:
         raise ValueError("min_sharpen_weight should in [0,1] and less than max_sharpen_weight")
+
+    clean=int(clean)
+    if clean not in [0,1,2]:
+        raise vs.Error("unknown clean mode.")
 
     ref,clip=core.fmtc.bitdepth(ref,bits=16),core.fmtc.bitdepth(clip,bits=16)
     if clip.format.color_family == vs.YUV:
@@ -452,11 +458,20 @@ def SCSharpen(
         raise vs.ValueError("ref must be YUV or GRAY")
 
     sharp=core.cas.CAS(last,1,0)
-    ref,last,sharp=map(getsharpness,[ref,last,sharp])
+    if use_psi:
+        ref,last,sharp=map(core.psi.PSI,[ref,last,sharp])
+        prop="PSI"
+    else:
+        ref,last,sharp=map(getsharpness,[ref,last,sharp])
+        prop="sharpness"
+
+    if clean==2:
+        sharp=EdgeCleaner(sharp,strength=10, rmode=17, smode=0, hot=False)
+
     #########################
-    base=" z.sharpness y.sharpness - "
-    k1=f"x.sharpness y.sharpness - {base} /"
-    k2=f"z.sharpness x.sharpness - {base} /"
+    base=f" z.{prop} y.{prop} - "
+    k1=f"x.{prop} y.{prop} - {base} /"
+    k2=f"z.{prop} x.{prop} - {base} /"
     L1=max_sharpen_weight
     L2=1-L1
     L3=min_sharpen_weight
@@ -465,7 +480,7 @@ def SCSharpen(
     expr=f"{base} 0 = {L1} z * {L2} y * + {k1} {L1} > {L1} z * {L2} y * + {k1} {L3} < {L3} z * {L4} y * + {k1} z * {k2} y * + ? ? ?"
     last=core.akarin.Expr([ref,last,sharp],expr)
     
-    if clean:
+    if clean==1:
         last=EdgeCleaner(last,strength=10, rmode=17, smode=0, hot=False)
     if isYUV:
         last=core.std.ShufflePlanes([last,clip],[0,1,2],vs.YUV)
