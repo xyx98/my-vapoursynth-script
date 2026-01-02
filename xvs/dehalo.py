@@ -111,7 +111,7 @@ def EdgeCleaner(
     main = Padding(c, 6, 6, 6, 6).warp.AWarpSharp2(blur=1, depth=cround(strength / 2)).std.Crop(6, 6, 6, 6)
     if rep:
         main = core.rgvs.Repair(main, c, mode=rmode)
-    mask = Prewitt(mask)
+    mask = Prewitt(main)
     mask = Expr(mask,expr=[f'x {scale(4, peak)} < 0 x {scale(32, peak)} > {peak} x ? ?'])
     mask=  core.std.InvertMask(mask).std.Convolution(matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
 
@@ -122,7 +122,7 @@ def EdgeCleaner(
         clean = c.rgvs.RemoveGrain(mode=17)
         diff = core.std.MakeDiff(c, clean)
         mask = Prewitt(diff.std.Levels(min_in=scale(40, peak), max_in=scale(168, peak), gamma=0.35).rgvs.RemoveGrain(mode=7))
-        mask=Expr(mask,f'x {scale(4, peak)} < 0 x {scale(16, peak)} > {peak} x ? ?')
+        mask = Expr(mask,f'x {scale(4, peak)} < 0 x {scale(16, peak)} > {peak} x ? ?')
         final = core.std.MaskedMerge(final, c, mask)
 
     if c_orig is not None:
