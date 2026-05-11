@@ -221,7 +221,7 @@ def multirescale(
                 slist[int(tmp[0])]={'select':int(tmp[1]),'diff':[float(i) for i in tmp[2:]]}
 
     if save is not None and save!=load:
-        saves=open(save,"w",encoding="utf-8")
+        saves=open(save,"w",encoding="utf-8",buffering=1)
         saves.write("n\tselect\t"+"\t".join([str(i) for i in range(len(kernels))])+"\n")
 
     def selector(n,f,src,clips):
@@ -279,7 +279,6 @@ def multirescale(
             if load:
                 last=core.std.SetFrameProp(last,'nkindex',intval=newindex)
         return last
-        saves.close()
 
     last=core.std.FrameEval(luma,functools.partial(selector,src=luma,clips=rescales),prop_src=rescales)
     if clip.format.color_family==vs.GRAY:
