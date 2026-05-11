@@ -227,6 +227,7 @@ def multirescale(
     def selector(n,f,src,clips):
         kernels_info=[]
         diffs=[]
+        usesrc=False
         if len(f)==1:
             f=[f]
         index,mindiff=0,f[0].props["diff"]
