@@ -2228,7 +2228,7 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
             info_short=f"{n}\t{index}\t"+info_short+"\n"
         
         if load is not None:
-            info+="--------------------\noverwrite info:\n"
+            info+="\n--------------------\noverwrite info:\n"
             if slist.get(n) is not None:
                 newindex=slist[n]["select"]
                 if newindex==-1:
