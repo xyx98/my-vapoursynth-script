@@ -2197,12 +2197,13 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
                 slist[int(tmp[0])]={'select':int(tmp[1]),'diff':[float(i) for i in tmp[2:]]}
 
     if save is not None and save!=load:
-        saves=open(save,"w",encoding="utf-8")
+        saves=open(save,"w",encoding="utf-8",buffering=1)
         saves.write("n\tselect\t"+"\t".join([str(i) for i in range(len(kernels))])+"\n")
 
     def selector(n,f,src,clips):
         kernels_info=[]
         diffs=[]
+        usesrc=False
         if len(f)==1:
             f=[f]
         index,mindiff=0,f[0].props["diff"]
@@ -2227,7 +2228,7 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
             info_short=f"{n}\t{index}\t"+info_short+"\n"
         
         if load is not None:
-            info+="--------------------\noverwrite info:\n"
+            info+="\n--------------------\noverwrite info:\n"
             if slist.get(n) is not None:
                 newindex=slist[n]["select"]
                 if newindex==-1:
@@ -2255,7 +2256,6 @@ def multirescale(clip:vs.VideoNode,kernels:list[dict],w:Optional[int]=None,h:Opt
             if load:
                 last=core.std.SetFrameProp(last,'nkindex',intval=newindex)
         return last
-        saves.close()
 
     last=core.std.FrameEval(luma,functools.partial(selector,src=luma,clips=rescales),prop_src=rescales)
     if clip.format.color_family==vs.GRAY:
